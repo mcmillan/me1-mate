@@ -1,22 +1,33 @@
-import { useStore } from 'jotai';
+import { useSetAtom } from 'jotai';
 import { useEffect, useState } from 'react';
-import { SizableText, Theme, YStack } from 'tamagui';
-import { dirtyAtom, loadAtom, startedAtom } from '../lib/store.ts';
-import { ACCENT, DISPLAY_FONT } from '../lib/theme.ts';
-import { ConfirmDialog } from './ConfirmDialog.tsx';
+import { SizableText, YStack } from 'tamagui';
+import { ACCENT } from '../lib/theme.ts';
+import { Mono } from './Notice.tsx';
+import { OpenFiles, openFilesAtom } from './OpenFiles.tsx';
 
 const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
 
+const DropIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 /**
- * Whole-window drop target for `.ME1` and `.meu` files, on the welcome screen
- * and in the editor, with a full-screen overlay while files are dragged over.
- * Dropping onto unsaved edits asks first, in a modal confirmation.
+ * The whole window is a drop target for `.ME1` and `.meu` files, with an
+ * overlay while files are dragged over it. What's dropped goes through the
+ * same flow as the Open button (`OpenFiles`, rendered here), which asks before
+ * replacing unsaved edits.
  */
 export const WindowDrop = () => {
-  const store = useStore();
+  const open = useSetAtom(openFilesAtom);
   const [over, setOver] = useState(false);
-  /** Dropped files waiting for the user to confirm replacing unsaved edits. */
-  const [pending, setPending] = useState<readonly File[] | null>(null);
 
   useEffect(() => {
     // dragenter/dragleave fire for every child crossed, so count them.
@@ -43,13 +54,7 @@ export const WindowDrop = () => {
       depth = 0;
       setOver(false);
       // Copy now: the DataTransfer's file list is emptied once the event ends.
-      const files = Array.from(e.dataTransfer?.files ?? []);
-      if (!files.length) return;
-      if (store.get(startedAtom) && store.get(dirtyAtom)) {
-        setPending(files);
-        return;
-      }
-      void store.set(loadAtom, files);
+      open(Array.from(e.dataTransfer?.files ?? []));
     };
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragover', overHandler);
@@ -61,66 +66,79 @@ export const WindowDrop = () => {
       window.removeEventListener('dragleave', leave);
       window.removeEventListener('drop', drop);
     };
-  }, [store]);
+  }, [open]);
 
-  const confirm = (
-    <ConfirmDialog
-      open={pending !== null}
-      title="Replace the current system?"
-      confirmLabel="Replace"
-      onClose={(confirmed) => {
-        if (confirmed && pending) void store.set(loadAtom, pending);
-        setPending(null);
-      }}
-    >
-      The dropped files will replace it, and your unsaved changes will be lost.
-    </ConfirmDialog>
-  );
-  if (!over) return confirm;
   return (
     <>
-      {confirm}
-      <YStack
-        position="fixed"
-        t={0}
-        l={0}
-        r={0}
-        b={0}
-        z={1000}
-        p="4"
-        pointerEvents="none"
-        aria-hidden
-      >
-        <YStack position="absolute" t={0} l={0} r={0} b={0} bg="background" opacity={0.88} />
-        <Theme name={ACCENT}>
+      <OpenFiles />
+      {over && (
+        <YStack
+          position="fixed"
+          t={0}
+          l={0}
+          r={0}
+          b={0}
+          z={1000}
+          p="3"
+          pointerEvents="none"
+          aria-hidden
+        >
           <YStack
-            position="relative"
-            flex={1}
-            items="center"
-            justify="center"
-            gap="2"
+            position="absolute"
+            t={0}
+            l={0}
+            r={0}
+            b={0}
+            opacity={0.9}
+            style={{ background: 'var(--canvas)' }}
+          />
+          {/* The dashed frame is its own element, so the accent stays off the card's text. */}
+          <YStack
+            theme={ACCENT}
+            position="absolute"
+            t={12}
+            l={12}
+            r={12}
+            b={12}
             rounded="xl"
-            borderWidth={3}
+            borderWidth={2}
             borderStyle="dashed"
             borderColor="color-8"
-          >
-            <SizableText size="2xl" fontWeight="800" color="color-11" text="center">
-              Drop{' '}
-              <SizableText size="2xl" fontWeight="800" fontFamily={DISPLAY_FONT} color="color-11">
-                .ME1
-              </SizableText>{' '}
-              and/or{' '}
-              <SizableText size="2xl" fontWeight="800" fontFamily={DISPLAY_FONT} color="color-11">
-                .meu
-              </SizableText>{' '}
-              files
-            </SizableText>
-            <SizableText size="sm" color="color-11">
-              They’re read here in the browser, not uploaded.
-            </SizableText>
+          />
+          <YStack position="relative" flex={1} items="center" justify="center" p="4">
+            <YStack
+              className="panel"
+              items="center"
+              gap="2"
+              px="5"
+              py="4"
+              maxW="100%"
+              rounded="xl"
+              borderWidth={1}
+            >
+              <YStack
+                theme={ACCENT}
+                w={36}
+                h={36}
+                rounded="lg"
+                items="center"
+                justify="center"
+                bg="color-3"
+                color="color-11"
+              >
+                <DropIcon />
+              </YStack>
+              <SizableText size="base" fontWeight="600" text="center">
+                Drop to open
+              </SizableText>
+              <SizableText size="sm" color="color-10" text="center">
+                An <Mono>.ME1</Mono>, a <Mono>.meu</Mono>, or both. They’re read here in the
+                browser, not uploaded.
+              </SizableText>
+            </YStack>
           </YStack>
-        </Theme>
-      </YStack>
+        </YStack>
+      )}
     </>
   );
 };

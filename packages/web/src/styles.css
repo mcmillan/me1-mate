@@ -1,0 +1,171 @@
+/*
+ * Page-level styles Tamagui's props can't express: the surface colours, the
+ * one-page layout, focus rings and touch sizes. Component-specific rules live
+ * in a <style> block next to the component that needs them.
+ */
+
+:root {
+  /* Surfaces. Keep --canvas in step with the critical CSS in index.html. */
+  --canvas: #f4f2f6;
+  --panel: #ffffff;
+  --panel-border: #e4e0e8;
+  --panel-shadow: 0 1px 2px rgb(28 27 30 / 0.05), 0 6px 16px -8px rgb(28 27 30 / 0.1);
+  --well: #f4f2f6;
+  /* Focus rings are neutral, so focus never reads as the orange of "selected". */
+  --focus: #1c1b1e;
+  /* Smallest size of anything you can press: 24px, or 44px for fingers. */
+  --target: 24px;
+  /* Height of the top bar when it's one row, for sticky offsets. */
+  --topbar: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #151417;
+    --panel: #201f23;
+    --panel-border: #34323a;
+    --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    --well: #151417;
+    --focus: #faf9fb;
+  }
+}
+
+@media (pointer: coarse) {
+  :root {
+    --target: 44px;
+  }
+  /* iOS zooms the page when a focused field's text is under 16px. */
+  input,
+  select,
+  textarea {
+    /* biome-ignore lint/complexity/noImportantStyles: has to beat Tamagui's atomic font-size classes */
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+body {
+  background: var(--canvas);
+}
+
+/* The top bar hides on the way down a long page; it asks how the page has scrolled. */
+html {
+  container-type: scroll-state;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+/* Tamagui gives its buttons a grey ring; one colour for every focus ring. */
+:root button:focus-visible {
+  outline-color: var(--focus);
+}
+
+.panel {
+  background: var(--panel);
+  border-color: var(--panel-border);
+  box-shadow: var(--panel-shadow);
+}
+
+.target {
+  min-block-size: var(--target);
+  min-inline-size: var(--target);
+}
+
+/*
+ * The page: keys, the selected key's inspector and the channels, all at once.
+ * In one column they stack in that order; with room, the inspector moves to
+ * its own column and stays in view while the page scrolls.
+ */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "keys" "inspector" "channels";
+  align-items: start;
+  gap: 12px;
+  inline-size: 100%;
+  max-inline-size: 1480px;
+  margin-inline: auto;
+  padding: 12px;
+}
+.workspace > * {
+  min-inline-size: 0;
+}
+.workspace-keys {
+  grid-area: keys;
+}
+.workspace-inspector {
+  grid-area: inspector;
+}
+.workspace-channels {
+  grid-area: channels;
+}
+
+/* Notices above the workspace: how to begin, and files that could not be opened. */
+.notices {
+  display: grid;
+  gap: 12px;
+  inline-size: 100%;
+  max-inline-size: 1480px;
+  margin-inline: auto;
+  padding: 12px 12px 0;
+}
+.notices:empty {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .workspace {
+    gap: 16px;
+    padding: 16px;
+  }
+  .notices {
+    padding: 16px 16px 0;
+  }
+}
+
+@media (min-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 26vw, 380px);
+    grid-template-areas: "keys inspector" "channels inspector";
+    grid-template-rows: auto 1fr;
+  }
+  /* As tall as the keys and channels beside it, so the columns end together. */
+  .workspace-inspector {
+    align-self: stretch;
+    position: sticky;
+    inset-block-start: calc(var(--topbar) + 16px);
+    max-block-size: calc(100dvh - var(--topbar) - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 12px;
+  }
+  .workspace-inspector > * {
+    min-block-size: 100%;
+  }
+}
+
+/* On a short laptop screen, tighten the gaps so the page still fits without scrolling. */
+@media (min-width: 1100px) and (max-height: 760px) {
+  .workspace {
+    gap: 12px;
+    padding-block: 12px;
+  }
+  .notices {
+    padding-block-start: 12px;
+  }
+  .workspace-inspector {
+    inset-block-start: calc(var(--topbar) + 12px);
+    max-block-size: calc(100dvh - var(--topbar) - 24px);
+  }
+}
+
+/*
+ * Forced colours paint backgrounds as Canvas, so marks made of background
+ * colour alone disappear: give the key-type dot an outline to stay visible.
+ */
+@media (forced-colors: active) {
+  .type-dot {
+    border: 2px solid CanvasText;
+  }
+}

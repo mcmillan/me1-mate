@@ -1,8 +1,8 @@
 import type { Issue } from '@mcmillan/2me2u-core';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { SizableText, XStack, YStack } from 'tamagui';
-import { describeIssue, issueIsAt, issueLocation } from '../lib/messages.ts';
-import { issuesAtom, selectedKeyAtom, systemAtom, viewAtom } from '../lib/store.ts';
+import { describeIssue, issueIsAt, issueKey } from '../lib/messages.ts';
+import { issuesAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
 import { WarningIcon } from './FieldError.tsx';
 import { Menu, MenuItem } from './Menu.tsx';
 import { Action } from './ui.tsx';
@@ -20,10 +20,6 @@ const CheckIcon = () => (
   </svg>
 );
 
-/** On a phone the top bar is tight: keep the check, and the words for screen readers only. */
-const READY_CSS =
-  '@media (max-width: 639px) { .ready-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }';
-
 /**
  * The input for an issue: the element whose `data-issue-path` is the issue's
  * path, or the closest field containing it (`keys[3]` for `keys[3].level`).
@@ -37,18 +33,38 @@ const fieldFor = (path: string): HTMLElement | undefined => {
   )[0];
 };
 
+const FOCUSABLE = 'input, select, textarea, button, [tabindex]';
+
+/**
+ * Focus an issue's field. Inside a field that isn't itself a control, the
+ * control marked `data-issue-focus` is the one to land on (a group member's
+ * remove button, not its level fader, where arrow keys would change the
+ * level); failing that, the first control in it.
+ */
 const focusField = (path: string, tries = 10) => {
   const el = fieldFor(path);
   if (el) {
-    const target = el.matches('input, select, textarea, button, [tabindex]')
+    const target = el.matches(FOCUSABLE)
       ? el
-      : (el.querySelector<HTMLElement>('input, select, textarea, button, [tabindex]') ?? el);
+      : (el.querySelector<HTMLElement>('[data-issue-focus]') ??
+        el.querySelector<HTMLElement>(FOCUSABLE) ??
+        el);
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
     target.focus({ preventScroll: true });
   } else if (tries > 0) {
-    // The view or key may still be rendering.
+    // The key may still be rendering in the inspector.
     window.setTimeout(() => focusField(path, tries - 1), 50);
   }
+};
+
+/** Go to an issue's field: select its key, so the inspector shows it, and focus the control. */
+export const useJumpToIssue = (): ((issue: Issue) => void) => {
+  const setSelectedKey = useSetAtom(selectedKeyAtom);
+  return (issue) => {
+    const key = issueKey(issue);
+    if (key !== undefined) setSelectedKey(key);
+    focusField(issue.path);
+  };
 };
 
 /**
@@ -58,28 +74,23 @@ const focusField = (path: string, tries = 10) => {
 export const ProblemsButton = () => {
   const issues = useAtomValue(issuesAtom);
   const system = useAtomValue(systemAtom);
-  const setView = useSetAtom(viewAtom);
-  const setSelectedKey = useSetAtom(selectedKeyAtom);
+  const jump = useJumpToIssue();
   if (issues.length === 0) {
     return (
-      <XStack theme="green" items="center" gap="1.5" px="2" role="status">
-        <SizableText size="xs" color="color-7" aria-hidden>
+      // `.top-ready` and `.top-quiet` (TopBar.tsx): on a narrow bar the check
+      // stands for the words, and on the narrowest the words are only spoken.
+      <XStack className="top-ready" items="center" gap="1.5" px="1.5" role="status">
+        <SizableText size="sm" color="color-10" aria-hidden>
           <CheckIcon />
         </SizableText>
-        <SizableText size="xs" color="color" className="ready-label">
-          Ready to export
-        </SizableText>
-        <style>{READY_CSS}</style>
+        <span className="top-quiet">
+          <SizableText size="sm" color="color-10">
+            Ready to export
+          </SizableText>
+        </span>
       </XStack>
     );
   }
-
-  const jump = (issue: Issue) => {
-    const at = issueLocation(issue);
-    setView(at.view);
-    if (at.key !== undefined) setSelectedKey(at.key);
-    focusField(issue.path);
-  };
 
   // A stereo pair can raise the same problem twice; list it once.
   const problems = [
@@ -100,6 +111,8 @@ export const ProblemsButton = () => {
             {...props}
             theme="red"
             kind="subtle"
+            className="target"
+            px="2"
             aria-label={`${count} to fix before exporting`}
             bg={open ? 'color-4' : { default: 'color-2', hover: 'color-3', press: 'color-4' }}
             borderColor="color-7"
@@ -110,7 +123,10 @@ export const ProblemsButton = () => {
                 <WarningIcon />
               </SizableText>
               <SizableText size="sm" fontWeight="600" color="color-11">
-                {count}
+                {problems.length}
+                <span className="top-quiet">
+                  {problems.length === 1 ? ' problem' : ' problems'}
+                </span>
               </SizableText>
             </XStack>
           </Action>

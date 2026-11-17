@@ -150,22 +150,10 @@ export const describeIssue = (issue: Issue, system?: Editable): string => {
   return sentence(reason);
 };
 
-/** Where an issue can be fixed. */
-export interface IssueLocation {
-  readonly view: 'keys' | 'channels';
-  /** The key to select, 0-based like `selectedKeyAtom`. */
-  readonly key?: number;
-  /** The channel, 1-based as the model and hardware number it. */
-  readonly channel?: number;
-}
-
-/** The view, and key or channel, where an issue can be fixed. */
-export const issueLocation = (issue: Issue): IssueLocation => {
+/** The key to select (0-based, like `selectedKeyAtom`) to fix an issue, if it's on a key. */
+export const issueKey = (issue: Issue): number | undefined => {
   const key = issue.path.match(/^keys\[(\d+)\]/);
-  if (key) return { view: 'keys', key: Number(key[1]) };
-  const channel = issue.path.match(/^channels\[(\d+)\]/);
-  if (channel) return { view: 'channels', channel: Number(channel[1]) + 1 };
-  return { view: issue.path.startsWith('channels') ? 'channels' : 'keys' };
+  return key ? Number(key[1]) : undefined;
 };
 
 /** Whether an issue at `issuePath` belongs to the field at `path` (or something inside it). */

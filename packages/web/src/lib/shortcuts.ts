@@ -1,6 +1,7 @@
 /**
  * Keyboard shortcuts for the editor: ⌘Z / Ctrl+Z undoes, ⇧⌘Z / Ctrl+Shift+Z /
- * Ctrl+Y redoes. Active only once the editor is open.
+ * Ctrl+Y redoes, once there is something to undo. What happened is announced,
+ * since nothing else tells a screen reader.
  *
  * In a text field the browser's own undo wins: someone fixing a typo in a name
  * expects ⌘Z to take back their last characters, not to jump the whole system
@@ -8,9 +9,10 @@
  * applies. ⌘S is left to the browser.
  */
 
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { useEffect } from 'react';
-import { redoAtom, startedAtom, undoAtom } from './store.ts';
+import { announce } from './announce.ts';
+import { canRedoAtom, canUndoAtom, redoAtom, startedAtom, undoAtom } from './store.ts';
 
 const isTextEntry = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
@@ -28,6 +30,7 @@ export const useShortcuts = (): void => {
   const started = useAtomValue(startedAtom);
   const undo = useSetAtom(undoAtom);
   const redo = useSetAtom(redoAtom);
+  const store = useStore();
 
   useEffect(() => {
     if (!started) return;
@@ -37,13 +40,15 @@ export const useShortcuts = (): void => {
       const key = e.key.toLowerCase();
       if (key === 'z' && !e.shiftKey) {
         e.preventDefault();
+        announce(store.get(canUndoAtom) ? 'Undone' : 'Nothing to undo');
         undo();
       } else if ((key === 'z' && e.shiftKey) || (key === 'y' && e.ctrlKey && !e.shiftKey)) {
         e.preventDefault();
+        announce(store.get(canRedoAtom) ? 'Redone' : 'Nothing to redo');
         redo();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [started, undo, redo]);
+  }, [started, undo, redo, store]);
 };

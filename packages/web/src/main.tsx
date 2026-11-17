@@ -1,4 +1,5 @@
 import '@tamagui/core/reset.css';
+import './styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TamaguiProvider } from 'tamagui';

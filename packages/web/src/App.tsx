@@ -1,48 +1,42 @@
-import { useAtomValue } from 'jotai';
-import { YStack } from 'tamagui';
-import { ChannelList } from './components/ChannelList.tsx';
-import { KeyDetail } from './components/KeyDetail.tsx';
+import { ChannelGrid } from './components/ChannelGrid.tsx';
+import { Inspector } from './components/Inspector.tsx';
+import { Intro } from './components/Intro.tsx';
 import { KeyGrid } from './components/KeyGrid.tsx';
-import { RestorePrompt } from './components/RestorePrompt.tsx';
 import { Toasts } from './components/Toasts.tsx';
 import { TopBar } from './components/TopBar.tsx';
-import { Welcome } from './components/Welcome.tsx';
 import { WindowDrop } from './components/WindowDrop.tsx';
-import { useAutosave } from './lib/session.ts';
+import { useAutosave, useRestoreOnLoad } from './lib/session.ts';
 import { useShortcuts } from './lib/shortcuts.ts';
-import { startedAtom, viewAtom } from './lib/store.ts';
 
-const Editor = () => {
-  const view = useAtomValue(viewAtom);
-  return (
-    <>
-      <TopBar />
-      <YStack render="main" w="100%" maxW={1280} mx="auto" p="4">
-        {view === 'keys' ? (
-          <YStack gap="4">
-            <KeyGrid />
-            <YStack w="100%" maxW={760} self="center">
-              <KeyDetail />
-            </YStack>
-          </YStack>
-        ) : (
-          <ChannelList />
-        )}
-      </YStack>
-    </>
-  );
-};
-
+/**
+ * One page: the 16 keys, the selected key's inspector and the 40 channels are
+ * all on screen together. The layout is `.workspace` in styles.css.
+ */
 export const App = () => {
-  const started = useAtomValue(startedAtom);
+  useRestoreOnLoad();
   useAutosave();
   useShortcuts();
   return (
-    <YStack minH="100vh" bg="background">
+    <>
       <WindowDrop />
-      <RestorePrompt />
-      {started ? <Editor /> : <Welcome />}
+      <TopBar />
+      <main>
+        <div className="notices">
+          <Intro />
+        </div>
+        <div className="workspace">
+          <div className="workspace-keys">
+            <KeyGrid />
+          </div>
+          <div className="workspace-inspector">
+            <Inspector />
+          </div>
+          <div className="workspace-channels">
+            <ChannelGrid />
+          </div>
+        </div>
+      </main>
       <Toasts />
-    </YStack>
+    </>
   );
 };

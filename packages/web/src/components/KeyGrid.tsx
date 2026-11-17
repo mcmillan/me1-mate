@@ -1,64 +1,48 @@
-import type { Key, Level } from '@mcmillan/2me2u-core';
+import type { Key } from '@mcmillan/2me2u-core';
 import { useAtom, useAtomValue } from 'jotai';
-import { type KeyboardEvent, useRef, useState } from 'react';
+import { type KeyboardEvent, useId, useRef } from 'react';
 import { SizableText, Theme, XStack, YStack } from 'tamagui';
-import { type Editable, isStereo, keyLabel } from '../lib/edit.ts';
-import { issuesAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
+import { type Editable, isStereo, keyLabel, levelText, pickTarget } from '../lib/edit.ts';
+import { highlightKeyAtom, issuesAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
 import { ACCENT, DISPLAY_FONT, KEY_TYPE_LABEL, KEY_TYPE_THEME } from '../lib/theme.ts';
-import { Action } from './ui.tsx';
+import { levelPosition } from './Fader.tsx';
+import { Action, Panel, PanelTitle, TypeDot } from './ui.tsx';
 
-/** A level as the tiles show it: one decimal place, `OFF`, and the default `0 dB`. */
-export const levelText = (level: Level | undefined): string => {
-  if (level === 'off') return 'OFF';
-  const db = Math.round((level ?? 0) * 10) / 10;
-  return db === 0 ? '0 dB' : `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`;
-};
-
-/** One line on what a key plays. */
-const summary = (system: Editable, key: Key): string => {
+/**
+ * What a key plays: a few characters for the tile, and in words for its
+ * accessible name. The tile drops `lead` when it's too narrow for both.
+ */
+const plays = (
+  system: Editable,
+  key: Key,
+): { lead?: string; text: string; spoken: string } | undefined => {
   switch (key.type) {
     case 'unassigned':
-      return 'Empty';
+      return undefined;
     case 'auto':
-      return 'Next free channel';
-    case 'channel':
-      return isStereo(system, key.channel)
-        ? `Ch ${key.channel}+${key.channel + 1}`
-        : `Ch ${key.channel}`;
+      return { lead: 'Next', text: 'free', spoken: 'next free channel' };
+    case 'channel': {
+      // A loaded file can refer to a pair by its second channel: show the pair.
+      const first = pickTarget(system, key.channel);
+      return isStereo(system, first)
+        ? {
+            lead: 'Ch',
+            text: `${first}+${first + 1}`,
+            spoken: `channels ${first} and ${first + 1}`,
+          }
+        : { lead: 'Ch', text: String(first), spoken: `channel ${first}` };
+    }
     case 'group': {
       const n = key.members.length;
-      return n === 0 ? 'No channels' : `${n} channel${n === 1 ? '' : 's'}`;
+      return {
+        text: `${n} ch`,
+        spoken: n === 0 ? 'no channels' : `${n} channel${n === 1 ? '' : 's'}`,
+      };
     }
     case 'unknown':
-      return 'Kept as-is';
+      return { lead: 'Kept', text: 'as-is', spoken: 'kept as-is' };
   }
 };
-
-/** A small pill naming a key type in that type's colour. */
-export const TypeBadge = ({ type }: { type: Key['type'] }) => (
-  <Theme name={KEY_TYPE_THEME[type] ?? null}>
-    <XStack
-      items="center"
-      gap="1"
-      px="1.5"
-      py={2}
-      rounded="full"
-      bg="color-3"
-      borderWidth={1}
-      borderColor="color-6"
-      self="flex-start"
-      maxW="100%"
-    >
-      <YStack w={6} h={6} rounded="full" bg="color-9" shrink={0} />
-      <SizableText size="xs" color="color-11" fontWeight="600" numberOfLines={1}>
-        {KEY_TYPE_LABEL[type]}
-      </SizableText>
-    </XStack>
-  </Theme>
-);
-
-/** Columns for the grid's width: the ME-1's 2×8 when there's room, else 4, else 2. */
-const columnsFor = (width: number): 8 | 4 | 2 => (width >= 640 ? 8 : width >= 300 ? 4 : 2);
 
 type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -112,34 +96,188 @@ const nearestTile = (
   return best?.index;
 };
 
+/**
+ * What Tamagui's props can't say. The grid asks its own width, not the
+ * viewport's, how many columns fit (the panel sits beside the inspector or
+ * above it), and each tile asks its own width how much text fits. Colours are
+ * the tile's theme (`--color-N`: orange when selected, else neutral) mixed
+ * into the panel, so light and dark come from the same rules.
+ *
+ * A tile's states are separate marks, so they show together: selected is a
+ * solid 2px accent edge and tint (the inner 1px is an inset shadow, so nothing
+ * moves), hover deepens the neutral fill and edge, a press shrinks it,
+ * keyboard focus is the page's offset outline, and a key pointed at from one
+ * of its markers in the Channels panel wears an edge in its type's colour,
+ * the same edge its channels wear when the tile is pointed at.
+ */
+const CSS = `
+.kg-box { container: kg / inline-size; }
+/* Keys 1–8 and 9–16 are the ME-1's two rows: more room between them than within one. */
+.kg-rows { display: grid; gap: 16px; }
+.kg-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+
+.kg-grid .kg-tile {
+  --kg-dash: 65%;
+  --kg-fill: color-mix(in srgb, var(--color-2) 40%, var(--panel));
+  --kg-edge: color-mix(in srgb, var(--color-8) 28%, var(--panel));
+  --kg-inner: transparent;
+  position: relative;
+  container: kg-tile / inline-size;
+  min-block-size: 78px;
+  padding: 8px;
+  background-color: var(--kg-fill);
+  box-shadow: inset 0 0 0 1px var(--kg-inner);
+}
+@media (prefers-color-scheme: dark) {
+  .kg-grid .kg-tile { --kg-dash: 40%; }
+}
+.kg-grid .kg-tile[data-empty] {
+  --kg-fill: transparent;
+  --kg-edge: color-mix(in srgb, var(--color-8) var(--kg-dash), var(--panel));
+}
+.kg-grid .kg-tile[aria-checked="true"] {
+  --kg-tint: var(--color-2);
+  --kg-fill: color-mix(in srgb, var(--kg-tint) 55%, var(--panel));
+  --kg-edge: var(--color-8);
+  --kg-inner: var(--color-8);
+}
+/* Dark orange's 2 is a red-brown; tint the selected tile with the orange itself. */
+@media (prefers-color-scheme: dark) {
+  .kg-grid .kg-tile[aria-checked="true"] { --kg-tint: color-mix(in srgb, var(--color-8) 30%, var(--panel)); }
+}
+@media (hover: hover) {
+  .kg-grid .kg-tile:hover {
+    --kg-fill: color-mix(in srgb, var(--color-2) 90%, var(--panel));
+    --kg-edge: color-mix(in srgb, var(--color-8) 55%, var(--panel));
+  }
+  .kg-grid .kg-tile[data-empty]:hover {
+    --kg-fill: color-mix(in srgb, var(--color-2) 50%, var(--panel));
+    --kg-edge: color-mix(in srgb, var(--color-8) 90%, var(--panel));
+  }
+  .kg-grid .kg-tile[aria-checked="true"]:hover {
+    --kg-fill: color-mix(in srgb, var(--kg-tint) 80%, var(--panel));
+    --kg-edge: var(--color-8);
+  }
+}
+/* A press deepens the fill and shrinks the tile, in place of the button's default dimming. */
+.kg-grid .kg-tile:active { --kg-fill: var(--color-2); scale: 0.97; opacity: 1; }
+.kg-grid .kg-tile[aria-checked="true"]:active { --kg-fill: var(--kg-tint); }
+/* Pointed at from a channel's marker: an edge in the key type's colour, over the tile's own. */
+.kg-tile .kg-point {
+  position: absolute;
+  inset: -1px;
+  border: 1.5px solid var(--color-6);
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+}
+.kg-grid .kg-tile[data-highlight]:not([aria-checked="true"], :hover, :focus-visible) .kg-point { opacity: 1; }
+.kg-grid .kg-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .kg-grid .kg-tile {
+    transition: background-color 130ms ease-out, border-color 130ms ease-out, box-shadow 130ms ease-out, scale 130ms ease-out;
+  }
+  .kg-tile .kg-point { transition: opacity 130ms ease-out; }
+}
+/*
+ * Forced colours drop the fills and shadows, and make every edge the same: the
+ * selected tile gets a thick edge in the system's selection colour instead
+ * (padding makes up the difference, so nothing moves).
+ */
+@media (forced-colors: active) {
+  .kg-grid .kg-tile[aria-checked="true"] { border: 3px solid Highlight !important; padding: 6px; }
+  .kg-tile .kg-point { border-color: CanvasText; }
+}
+
+/*
+ * The panel's own width decides the columns: the ME-1's two rows of eight once
+ * each tile has room for a full label and what the key plays.
+ */
+@container kg (inline-size >= 664px) {
+  .kg-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
+@container kg (inline-size < 300px) {
+  .kg-rows { gap: 12px; }
+  .kg-grid { gap: 4px; }
+  .kg-grid .kg-tile { padding: 5px; }
+}
+@container kg (inline-size < 232px) {
+  .kg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/*
+ * The number, then the level if there's room beside it: when there isn't, the
+ * level wraps to a second line, and the row is one line tall.
+ */
+.kg-tile .kg-top {
+  display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; column-gap: 6px;
+  block-size: 14px; overflow: hidden;
+}
+.kg-tile .kg-top > * { flex: none; }
+.kg-tile :is(.kg-num, .kg-count, .kg-level) { line-height: 14px; font-variant-numeric: tabular-nums; }
+.kg-tile .kg-level { margin-inline-start: auto; }
+.kg-tile .kg-unit { display: none; }
+.kg-tile .kg-label {
+  margin-block-start: 3px; font-size: 16px; line-height: 20px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kg-tile .kg-label[data-empty] { font-size: 13px; }
+.kg-tile .kg-meta { display: flex; align-items: center; gap: 5px; margin-block-start: 1px; block-size: 15px; }
+.kg-tile .kg-dot { display: none; }
+.kg-tile .kg-plays { min-inline-size: 0; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kg-tile .kg-meter { margin-block-start: auto; background: color-mix(in srgb, var(--color-8) 22%, transparent); }
+
+/*
+ * A tile's own width (its content box) decides how much it says. Six
+ * characters of label always fit; the type dot joins what the key plays, and
+ * the unit joins the level, once the longest of each fits.
+ */
+@container kg-tile (inline-size >= 70px) {
+  .kg-tile .kg-dot { display: contents; }
+}
+@container kg-tile (inline-size >= 96px) {
+  .kg-tile .kg-unit { display: inline; }
+}
+@container kg-tile (inline-size < 58px) {
+  .kg-tile .kg-label { font-size: 14px; }
+  .kg-tile .kg-lead { display: none; }
+  .kg-tile .kg-lead + .kg-rest { text-transform: capitalize; }
+}
+`;
+
 const Tile = ({
   index,
   keyValue: key,
   selected,
+  highlighted,
   problems,
-  compact,
   onSelect,
   onKeyDown,
+  onPoint,
   tileRef,
 }: {
   index: number;
   keyValue: Key;
   selected: boolean;
+  highlighted: boolean;
   problems: number;
-  compact: boolean;
   onSelect: () => void;
   onKeyDown: (e: KeyboardEvent) => void;
+  /** The pointer or focus arrived on this tile (`true`) or left it. */
+  onPoint: (on: boolean) => void;
   tileRef: (el: HTMLElement | null) => void;
 }) => {
   const system = useAtomValue(systemAtom);
   const empty = key.type === 'unassigned';
   const label = keyLabel(system, key);
-  const line = summary(system, key);
+  const playing = plays(system, key);
   const level = empty ? undefined : levelText(key.level);
+  const [levelValue, levelUnit] = level?.split(' ') ?? [];
+  const position = empty ? 0 : levelPosition(key.level ?? 0);
   const name = [
     `Key ${index + 1}: ${empty ? 'unassigned' : label}`,
     empty ? undefined : KEY_TYPE_LABEL[key.type],
-    empty ? undefined : line,
+    playing?.spoken,
     level,
     problems > 0 ? `${problems} problem${problems === 1 ? '' : 's'}` : undefined,
   ]
@@ -150,100 +288,137 @@ const Tile = ({
     <Theme name={selected ? ACCENT : null}>
       <Action
         ref={tileRef as never}
+        className="kg-tile"
         role="radio"
         aria-checked={selected}
         aria-label={name}
         tabIndex={selected ? 0 : -1}
+        data-empty={empty ? '' : undefined}
+        data-highlight={highlighted ? '' : undefined}
         onPress={onSelect}
         onKeyDown={onKeyDown}
-        kind="subtle"
-        flex={1}
-        flexBasis={0}
-        minW={0}
+        onPointerEnter={() => onPoint(true)}
+        onPointerLeave={() => onPoint(false)}
+        onFocus={() => onPoint(true)}
+        onBlur={() => onPoint(false)}
         h="auto"
-        p={compact ? '1.5' : '2'}
         rounded="lg"
         flexDirection="column"
         items="stretch"
         justify="flex-start"
-        gap={compact ? '1' : '1.5'}
-        borderWidth={selected ? 2 : 1}
+        gap="0"
+        bg="transparent"
         borderStyle={empty && !selected ? 'dashed' : 'solid'}
-        bg={
-          selected
-            ? 'color-2'
-            : empty
-              ? { default: 'transparent', hover: 'color-2', press: 'color-3' }
-              : { default: 'background', hover: 'color-2', press: 'color-3' }
-        }
-        borderColor={selected ? 'color-8' : 'border-color'}
+        // The edge colour is a state of the tile, worked out in the CSS above.
+        style={{ borderColor: 'var(--kg-edge)' }}
       >
-        <XStack items="center" gap="1">
+        <span className="kg-top">
           <SizableText
+            className="kg-num"
             size="xs"
-            fontWeight="700"
-            color={selected ? 'color-11' : 'color-10'}
             fontFamily={DISPLAY_FONT}
+            fontWeight="600"
+            color="color-8"
           >
             {String(index + 1).padStart(2, '0')}
           </SizableText>
           {problems > 0 && (
             <Theme name="red">
-              <XStack items="center" gap="1" px="1" rounded="full" bg="color-3" aria-hidden>
-                <YStack w={6} h={6} rounded="full" bg="color-9" />
-                {!compact && (
-                  <SizableText size="xs" color="color-11" fontWeight="700">
-                    {problems}
-                  </SizableText>
-                )}
+              <XStack
+                render="span"
+                items="center"
+                justify="center"
+                h={14}
+                minW={14}
+                px="1"
+                rounded="full"
+                bg="color-9"
+              >
+                <SizableText
+                  className="kg-count"
+                  size="xs"
+                  fontFamily={DISPLAY_FONT}
+                  fontWeight="700"
+                  color="color-1"
+                >
+                  {problems}
+                </SizableText>
               </XStack>
             </Theme>
           )}
-          {level && !compact && (
-            <SizableText size="xs" color="color-10" fontFamily={DISPLAY_FONT} ml="auto">
-              {level}
+          {level && (
+            <SizableText className="kg-level" size="xs" fontFamily={DISPLAY_FONT} color="color-10">
+              {levelValue}
+              {levelUnit && <span className="kg-unit"> {levelUnit}</span>}
             </SizableText>
           )}
-          {compact && !empty && (
+        </span>
+        {empty ? (
+          <SizableText className="kg-label" data-empty="" size="sm" color="color-8" text="left">
+            Empty
+          </SizableText>
+        ) : (
+          <SizableText
+            className="kg-label"
+            size="base"
+            fontFamily={DISPLAY_FONT}
+            fontWeight="600"
+            color="color-11"
+            text="left"
+          >
+            {label}
+          </SizableText>
+        )}
+        {playing && (
+          <span className="kg-meta">
+            <span className="kg-dot">
+              <TypeDot type={key.type} />
+            </span>
+            <SizableText className="kg-plays" size="xs" color="color-10">
+              {playing.lead && <span className="kg-lead">{playing.lead} </span>}
+              <span className="kg-rest">{playing.text}</span>
+            </SizableText>
+          </span>
+        )}
+        {!empty && (
+          <YStack render="span" className="kg-meter" h={4} rounded="full" overflow="hidden">
             <Theme name={KEY_TYPE_THEME[key.type] ?? null}>
-              <YStack w={8} h={8} rounded="full" bg="color-9" ml="auto" aria-hidden />
+              <YStack render="span" h="100%" w={`${position * 100}%`} rounded="full" bg="color-9" />
             </Theme>
-          )}
-        </XStack>
-        <SizableText
-          size={compact ? 'base' : 'lg'}
-          fontFamily={DISPLAY_FONT}
-          fontWeight="600"
-          numberOfLines={1}
-          color={empty ? 'color-8' : 'color'}
-        >
-          {label}
-        </SizableText>
-        {!empty && !compact && <TypeBadge type={key.type} />}
-        <SizableText size="xs" color="color-10" numberOfLines={1}>
-          {compact && level ? level : line}
-        </SizableText>
+          </YStack>
+        )}
+        <Theme name={KEY_TYPE_THEME[key.type] ?? null}>
+          <span className="kg-point" />
+        </Theme>
       </Action>
     </Theme>
   );
 };
 
-const LEGEND: readonly Key['type'][] = ['channel', 'group', 'auto', 'unknown'];
+const LEGEND: readonly Key['type'][] = ['channel', 'group', 'auto'];
 
 /**
- * The 16 Select keys laid out as on the ME-1: 1–8 above 9–16, with a band
- * between the two halves where the device's label strip sits. Narrow columns
- * fall back to 4 or 2 columns. Selecting a key opens it in KeyDetail.
+ * The key selector: the 16 select keys laid out as on the ME-1, 1–8 above
+ * 9–16, with a wider gap between the two rows than between the keys of one.
+ * A narrow panel folds each row of eight into two rows of four (the columns
+ * follow the panel's width, not the viewport's). Each tile
+ * shows the key at a glance (number, label, what it plays, level, type by
+ * colour, problems); selecting one opens it in the inspector and makes it the
+ * key that channel picks assign to. Pointing at or focusing a tile sets
+ * `highlightKeyAtom`, so the Channels panel can point out its channels.
  */
 export const KeyGrid = () => {
   const system = useAtomValue(systemAtom);
   const issues = useAtomValue(issuesAtom);
   const [selected, setSelected] = useAtom(selectedKeyAtom);
-  const [width, setWidth] = useState(0);
+  const [highlight, setHighlight] = useAtom(highlightKeyAtom);
   const tiles = useRef<(HTMLElement | null)[]>([]);
+  const titleId = useId();
   const count = system.keys.length;
-  const columns = columnsFor(width || 640);
-  const compact = columns === 8 ? width < 820 : columns === 4 && width < 440;
+  const half = Math.ceil(count / 2);
+  const legend: readonly Key['type'][] = system.keys.some((k) => k.type === 'unknown')
+    ? [...LEGEND, 'unknown']
+    : LEGEND;
 
   const select = (i: number, focus = false) => {
     setSelected(i);
@@ -269,74 +444,57 @@ export const KeyGrid = () => {
     tiles.current[next]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
 
+  /** Point a tile out, or stop, unless something else has been pointed out since. */
+  const point = (i: number) => (on: boolean) =>
+    setHighlight((current) => (on ? i : current === i ? null : current));
+
   const problemsOf = (i: number) => issues.filter((x) => x.path.startsWith(`keys[${i}]`)).length;
 
-  const rows = Array.from({ length: Math.ceil(count / columns) }, (_, r) =>
-    system.keys.slice(r * columns, (r + 1) * columns).map((key, c) => ({
-      key,
-      index: r * columns + c,
-    })),
-  );
-  const half = Math.ceil(count / 2);
-
   return (
-    <YStack gap="3" onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <XStack items="baseline" justify="space-between" gap="2">
-        <SizableText size="sm" fontWeight="600" render="h2">
-          Keys
-        </SizableText>
-        <SizableText size="xs" color="color-10">
-          Arrow keys move between keys
-        </SizableText>
+    <Panel render="section" aria-labelledby={titleId} p={{ default: '3', sm: '4' }}>
+      <style href="kg" precedence="default">
+        {CSS}
+      </style>
+      <XStack items="center" justify="space-between" gap="3" flexWrap="wrap">
+        <PanelTitle id={titleId}>Keys</PanelTitle>
+        <XStack items="center" gap="3" aria-hidden>
+          {legend.map((type) => (
+            <XStack key={type} items="center" gap="1.5">
+              <TypeDot type={type} />
+              <SizableText size="xs" color="color-8">
+                {KEY_TYPE_LABEL[type]}
+              </SizableText>
+            </XStack>
+          ))}
+        </XStack>
       </XStack>
-      <YStack role="radiogroup" aria-label="Keys" gap="2">
-        {rows.map((row) => {
-          const first = row[0]?.index ?? 0;
-          return (
-            <YStack key={first} gap="2">
-              {first === half && (
-                // Where the ME-1's label strip sits between keys 1–8 and 9–16.
-                <YStack h={4} mx="1" rounded="full" bg="color-3" aria-hidden />
-              )}
-              <XStack gap="2">
-                {row.map(({ key, index }) => (
+      <div className="kg-box">
+        <div role="radiogroup" aria-label="Keys" className="kg-rows">
+          {[0, half].map((from) => (
+            <div key={from} role="presentation" className="kg-grid">
+              {system.keys.slice(from, from + half).map((key, offset) => {
+                const index = from + offset;
+                return (
                   <Tile
                     key={index}
                     index={index}
                     keyValue={key}
                     selected={index === selected}
+                    highlighted={index === highlight}
                     problems={problemsOf(index)}
-                    compact={compact}
                     onSelect={() => select(index)}
                     onKeyDown={onKeyDown(index)}
+                    onPoint={point(index)}
                     tileRef={(el) => {
                       tiles.current[index] = el;
                     }}
                   />
-                ))}
-              </XStack>
-            </YStack>
-          );
-        })}
-      </YStack>
-      <XStack gap="2" flexWrap="wrap" items="center" aria-label="Key type colours">
-        {LEGEND.map((t) => (
-          <TypeBadge key={t} type={t} />
-        ))}
-        <XStack
-          items="center"
-          px="1.5"
-          py={2}
-          rounded="full"
-          borderWidth={1}
-          borderStyle="dashed"
-          borderColor="border-color"
-        >
-          <SizableText size="xs" color="color-10">
-            Unassigned
-          </SizableText>
-        </XStack>
-      </XStack>
-    </YStack>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Panel>
   );
 };

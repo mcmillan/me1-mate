@@ -1,12 +1,13 @@
 /**
- * Autosave: the editor's work survives a reload or a closed tab. What's saved
- * is the original file bytes plus the edited channels and keys; on restore the
- * files are parsed again to recover `source`, so a re-export stays byte-exact.
- * Everything stays in this browser's localStorage.
+ * Autosave: the editor's work survives a reload or a closed tab, and comes
+ * back when the page is opened again. What's saved is the original file bytes
+ * plus the edited channels and keys; on restore the files are parsed again to
+ * recover `source`, so a re-export stays byte-exact. Everything stays in this
+ * browser's localStorage.
  */
 
 import type { Channel, Key } from '@mcmillan/2me2u-core';
-import { useAtomValue, useSetAtom, type useStore } from 'jotai';
+import { atom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { useEffect, useRef } from 'react';
 import { blank, type Editable, fromSystem } from './edit.ts';
 import { type LoadedFile, type LoadedFiles, load } from './files.ts';
@@ -31,7 +32,7 @@ interface SavedFile {
 }
 
 /** A saved session, as stored. */
-export interface Session {
+interface Session {
   readonly version: 1;
   /** When it was saved, ms since the epoch. */
   readonly savedAt: number;
@@ -88,7 +89,7 @@ const isSession = (value: unknown): value is Session => {
 };
 
 /** The saved session, if there is a readable one. */
-export const readSession = (): Session | null => {
+const readSession = (): Session | null => {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
@@ -99,7 +100,7 @@ export const readSession = (): Session | null => {
   }
 };
 
-export const discardSession = (): void => {
+const discardSession = (): void => {
   try {
     localStorage.removeItem(KEY);
   } catch {
@@ -136,7 +137,7 @@ const toLoaded = (saved: SavedFile): File => {
  * it started. Resolves `false` if the files couldn't be read again, in which
  * case only the channels and keys came back.
  */
-export const restoreSession = async (
+const restoreSession = async (
   session: Session,
   store: ReturnType<typeof useStore>,
 ): Promise<boolean> => {
@@ -163,12 +164,48 @@ export const restoreSession = async (
   return ok;
 };
 
-// ---- the hook --------------------------------------------------------------
+// ---- restoring at startup --------------------------------------------------
+
+/** The session saved by the last visit, read once as the page loads. */
+const lastSession = readSession();
+let restoreBegun = false;
+
+/** True while the last session is being brought back; the page doesn't say how to begin meanwhile. */
+export const restoringAtom = atom(lastSession !== null);
+
+/**
+ * Bring the last session back as the page opens, without asking: the editor
+ * reopens where it was left, and New starts over.
+ */
+export const useRestoreOnLoad = (): void => {
+  const store = useStore();
+  useEffect(() => {
+    if (restoreBegun || !lastSession) return;
+    restoreBegun = true;
+    const done = (message: string, tone: 'success' | 'error') => {
+      store.set(restoringAtom, false);
+      store.set(toastAtom, { message, tone });
+    };
+    restoreSession(lastSession, store).then(
+      (ok) =>
+        ok
+          ? done(`Picked up where you left off: ${lastSession.configName}`, 'success')
+          : done(
+              'The original files couldn’t be read again; your channels and keys are back',
+              'error',
+            ),
+      () => done('Your last session couldn’t be brought back', 'error'),
+    );
+  }, [store]);
+};
+
+// ---- saving ----------------------------------------------------------------
 
 /**
  * Save the editor to localStorage a moment after each change, once the user
- * has started. Storage that's unavailable or full is skipped quietly, with
- * one notice if it's full.
+ * has started; a blank system with nothing loaded clears what was saved.
+ * Storage that's unavailable or full is skipped quietly, with one notice if
+ * it's full.
  */
 export const useAutosave = (): void => {
   const started = useAtomValue(startedAtom);
@@ -184,6 +221,11 @@ export const useAutosave = (): void => {
     if (!started) return;
     const save = () => {
       pending.current = null;
+      // A blank, untouched system isn't a session worth offering back.
+      if (!files.me1 && !files.meu && !dirty) {
+        discardSession();
+        return;
+      }
       const result = writeSession({
         version: 1,
         savedAt: Date.now(),

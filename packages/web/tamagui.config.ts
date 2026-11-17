@@ -33,10 +33,18 @@ const orangeThemes = Object.fromEntries(
     ]),
 ) as Record<`${'light' | 'dark'}_orange${'' | `_${string}`}`, Theme>;
 
+/**
+ * Muted text (titles, hints, units) is `color-8`. The stock dark theme makes
+ * it nearly as bright as body text, so nothing on the page is quiet; this
+ * brings it down, still AA on the panel surface.
+ */
+const DARK_MUTED = '#9d9aa6';
+
 export const config = createTamagui({
   ...defaultConfig,
   themes: {
     ...defaultConfig.themes,
+    dark: { ...defaultConfig.themes.dark, 'color-8': DARK_MUTED },
     ...orangeThemes,
     light_orange: recolour(defaultConfig.themes.light_yellow, 'yellow', 'orange'),
     dark_orange: recolour(defaultConfig.themes.dark_yellow, 'yellow', 'orange'),

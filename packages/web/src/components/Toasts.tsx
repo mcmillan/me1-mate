@@ -24,7 +24,7 @@ const supportsPopover =
  */
 const CSS = `
 .toasts { position: fixed; inset: auto 16px 16px 16px; width: auto; height: auto; max-height: calc(100dvh - 32px); overflow-y: auto; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; opacity: 1; }
-@media (min-width: 768px) { .toasts { left: auto; right: 24px; bottom: 24px; align-items: flex-end; } }
+@media (min-width: 768px) { .toasts { left: 24px; right: auto; bottom: 24px; align-items: flex-start; } }
 .toasts[popover] { transition: opacity 160ms ease-out, display 160ms, overlay 160ms; transition-behavior: allow-discrete; }
 .toasts[popover]:not(:popover-open) { display: none; opacity: 0; }
 @starting-style { .toasts[popover]:popover-open { opacity: 0; } }
@@ -125,7 +125,7 @@ const ToastItem = ({
 };
 
 /**
- * Notifications from `toastsAtom`, stacked bottom-centre (bottom right on
+ * Notifications from `toastsAtom`, stacked bottom-centre (bottom left on
  * wider screens) in one "Notifications" region on a manual popover. Each is
  * announced with `ariaNotify()`, or a live region where that's missing.
  * Successes dismiss themselves after a few seconds, waiting while hovered or
