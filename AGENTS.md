@@ -75,6 +75,20 @@ make sure every export is described and nothing described is gone.
 - State is Jotai: one `systemAtom` holds the editable system, and exports and
   validation issues are derived atoms. Edits are pure functions in
   `lib/edit.ts`, applied through `editAtom`.
+- The editor is one page (`App.tsx`, laid out by `.workspace` in
+  `styles.css`): the key grid, the selected key's inspector and the channel
+  grid are always on screen together; don't add views, tabs or a welcome
+  gate. Channels are assigned by picking: `pickChannel` in `lib/edit.ts` is
+  the one gesture, applied to `selectedKeyAtom`, and `highlightKeyAtom` links
+  a key and its channels on hover and focus. With files loaded the page must
+  fit a 1280×720 window without scrolling; check it when a panel grows.
+- Surfaces come from CSS variables in `styles.css` (`--canvas`, `--panel`,
+  `--panel-border`, `--well`, `--focus`), which Tamagui tokens don't cover;
+  `Panel` and `PanelTitle` in `ui.tsx` use them. Orange means selected or the
+  primary action, the key-type colours mean key types, red means a problem;
+  don't use colour for anything else. Component-specific CSS lives in a
+  `<style>` block beside the component, with class names prefixed by it
+  (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `intro-`).
 - Everything runs in the browser; nothing is uploaded.
 - Use `Action` (`components/ui.tsx`) for every button and the colours in
   `lib/theme.ts` (`ACCENT`, `KEY_TYPE_THEME`), so a key type looks the same
@@ -84,6 +98,16 @@ make sure every export is described and nothing described is gone.
 - Tamagui 3 has no `hoverStyle`/`pressStyle`: use conditional values
   (`bg={{ default: 'color-2', hover: 'color-3' }}`). Breakpoints go in values
   the same way.
+- "Unsaved changes" (`dirtyAtom`) compares what each file would be now with
+  what was last loaded or exported, file by file; don't go back to comparing
+  the system by identity. The last session is restored when the page opens
+  (`useRestoreOnLoad`); a blank, untouched system is never saved as one.
+- A linked stereo pair is named by its first channel only, as in the ME-1's
+  own editor: don't offer a name field for the second channel, and don't
+  change the name it already has (exports stay byte-exact).
+- Linking a stereo pair points keys at the pair's first channel
+  (`setStereo`); a loaded file may still refer to a pair's second channel, so
+  go through `pickTarget` / `keyPlays` rather than comparing channel numbers.
 - Typed edits pass a merge key to `editAtom` (the field's issue path, e.g.
   `keys[3].name`) so they undo in one step. Editable controls carry
   `data-issue-path` with the core's issue path, so the Problems list can focus
@@ -108,6 +132,9 @@ make sure every export is described and nothing described is gone.
   the UI the same way the core README tracks the API.
 
 ## Tests
+
+The web package's unit tests (`packages/web/test`) cover the pure edits in
+`lib/edit.ts`; add a case when you add or change one.
 
 Fixtures in `packages/core/test/fixtures` are real files; don't edit them. Add
 a fixture when you get a file showing something new (an Aux Input key, a
