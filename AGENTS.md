@@ -75,33 +75,45 @@ make sure every export is described and nothing described is gone.
 - State is Jotai: one `systemAtom` holds the editable system, and exports and
   validation issues are derived atoms. Edits are pure functions in
   `lib/edit.ts`, applied through `editAtom`.
-- The editor is one page (`App.tsx`, laid out by `.workspace` in
-  `styles.css`): the key grid, the selected key's inspector and the channel
-  grid are always on screen together; don't add views, tabs or a welcome
-  gate. Channels are assigned by picking: `pickChannel` in `lib/edit.ts` is
-  the one gesture, applied to `selectedKeyAtom`, and `highlightKeyAtom` links
-  a key and its channels on hover and focus. With files loaded the page must
-  fit a 1280×720 window without scrolling; check it when a panel grows.
-- Surfaces come from CSS variables in `styles.css` (`--canvas`, `--panel`,
-  `--panel-border`, `--well`, `--focus`), which Tamagui tokens don't cover;
-  `Panel` and `PanelTitle` in `ui.tsx` use them. Orange means selected or the
-  primary action, the key-type colours mean key types, red means a problem;
-  don't use colour for anything else. Component-specific CSS lives in a
-  `<style>` block beside the component, with class names prefixed by it
-  (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `intro-`).
+- Two screens (`screenAtom`): Home (`Home.tsx`: ways to begin, how it
+  works, past sessions) and the editor. The editor is one page (`App.tsx`,
+  laid out by `.workspace` in `styles.css`): the key grid, the selected key's
+  inspector and the channel grid are always on screen together; don't add
+  views or tabs to it. Channels are assigned by picking: `pickChannel` in
+  `lib/edit.ts` is the one gesture, applied to `selectedKeyAtom`, and
+  `highlightKeyAtom` links a key and its channels on hover and focus. With
+  files loaded the editor must fit a 1280×720 window without scrolling; check
+  it when a panel grows. The tour (`Tour.tsx`) points at the regions by their
+  roles and wrapper classes; keep it true when they change.
+- Look: the typeface is Allo (`public/fonts`, set in `styles.css`; tabular,
+  disambiguated figures, no monospace). Weights come only from the
+  `--w-text`/`--w-ui`/`--w-strong`/`--w-display`/`--w-black` variables in
+  `styles.css`, never numbers, so the page can be made lighter or heavier in
+  one place. Colours: neutrals are `--canvas`, `--ink`, `--muted`, `--line`,
+  `--card`, `--well` (the Tamagui tokens are tuned to match), and every key
+  has its own colour (`keyColor` / `keyStyle` in `lib/theme.ts`, read as
+  `var(--k)`, text on it `--on-key`). Colour means which key, never key type
+  (say type in words); selected is an ink ring; focus is the blue `--focus`
+  ring; red means a problem. Show little at rest and reveal detail on hover
+  and focus (always visible under `hover: none`). Component-specific CSS
+  lives in a `<style>` block beside the component, with class names prefixed
+  by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,
+  `sess-`, `tour-`).
 - Everything runs in the browser; nothing is uploaded.
-- Use `Action` (`components/ui.tsx`) for every button and the colours in
-  `lib/theme.ts` (`ACCENT`, `KEY_TYPE_THEME`), so a key type looks the same
-  everywhere. The orange accent is generated in `tamagui.config.ts` from the
-  stock yellow themes, including their `_level` variants; a new colour theme
-  needs those variants too, or nested buttons fall back to grey.
+- Use `Action` (`components/ui.tsx`) for every button: `primary` is the ink
+  pill, `subtle` the outlined pill, `ghost` chrome-less.
 - Tamagui 3 has no `hoverStyle`/`pressStyle`: use conditional values
   (`bg={{ default: 'color-2', hover: 'color-3' }}`). Breakpoints go in values
   the same way.
-- "Unsaved changes" (`dirtyAtom`) compares what each file would be now with
-  what was last loaded or exported, file by file; don't go back to comparing
-  the system by identity. The last session is restored when the page opens
-  (`useRestoreOnLoad`); a blank, untouched system is never saved as one.
+- "Unsaved changes" (`dirtyAtom`) means not exported yet: it compares what
+  each file would be now with what was last loaded or exported, file by
+  file; don't go back to comparing the system by identity.
+- Sessions (`lib/session.ts`): the open system is saved as you go under its
+  `sessionIdAtom`, and the last 12 are listed on Home. Opening files and New
+  always start a new session, so nothing is overwritten and nothing asks to
+  confirm; only the missing half of what's open (`.meu` for an `.ME1` alone,
+  or the reverse) joins the open session (`openFilesAtom` in the store). A
+  blank system with nothing loaded is never kept as a session.
 - A linked stereo pair is named by its first channel only, as in the ME-1's
   own editor: don't offer a name field for the second channel, and don't
   change the name it already has (exports stay byte-exact).

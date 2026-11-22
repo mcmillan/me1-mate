@@ -7,41 +7,56 @@ files never leave the machine.
 Live at <https://mcmillan.github.io/2me2u/>, deployed by
 `.github/workflows/pages.yml` on every push to `main`.
 
-Everything is on one page, with no welcome screen and no tabs:
+The app has two screens.
 
-- **Keys**: the 16 keys laid out like the ME-1's, two rows of eight, each
-  showing its label, what it plays and its level. Select one (click, or arrow
-  keys, which follow the layout on screen) and it becomes the key you're
-  working on.
-- **Channels**: all 40 channels at once, by stereo pair: a name for each and
-  a link toggle per pair. A linked pair has one name, its first channel's, as
-  on the ME-1; the second channel's name isn't shown or changed. Each channel has a numbered pick button that assigns
-  it to the selected key: an empty key becomes a channel key, a channel key
-  switches channel, and a group adds the channel or, if it's already in, takes
-  it out. A channel can be in one group, so picking it for another group moves
-  it. Small markers show which keys use each channel; press one to go to that
-  key.
+**Home** is the front door: what 2me2u is, three ways to begin (open files,
+start a new system, or try a built-in example band), a three-step "how it
+works", and your past sessions. Every system you work on is a session, saved
+in the browser as you go; the last 12 are listed with a small picture of their
+keys, when they were edited, and whether they've been exported. Open one to
+carry on, or delete it.
+
+**The editor** has everything on one page:
+
+- **Keys**: the 16 keys laid out like the ME-1's, two rows of eight. Every
+  key has its own colour, and everything that belongs to a key wears it: its
+  tile, the channels it plays, and the inspector while it's selected. Select
+  a key (click, or arrow keys, which follow the layout on screen) to work on
+  it.
+- **Channels**: all 40 channels at once, a cell per stereo pair, with a name
+  for each channel and a link toggle per pair. A linked pair has one name, its
+  first channel's, as on the ME-1; the second channel's name isn't shown or
+  changed. Each channel's numbered chip assigns it to the selected key: an
+  empty key becomes a channel key, a channel key switches channel, and a group
+  adds the channel or, if it's already in, takes it out. A channel can be in
+  one group, so picking it for another group moves it. A chip takes the colour
+  of the key that plays it; open chips are channels no key uses. Pointing at a
+  key fades the channels it doesn't play.
 - **Inspector**: the selected key's type, label and level, and for a group a
   level for each of its channels. It stays in view beside the keys and
   channels on a wide screen and sits between them on a narrow one.
-- **Top bar**: the config's name (the `.ME1` file's name), undo and redo
-  (⌘Z / ⇧⌘Z), Open, New, whether the system is ready to export, and Export.
-- **Starting**: the page opens on a blank system with a short note on how to
-  begin: drop an `.ME1`, a `.meu`, or both anywhere in the window, press Open,
-  or just start picking. If you were editing before, the page reopens where
-  you left it.
+- **Top bar**: the wordmark (back to Home), the config's name (the `.ME1`
+  file's name), undo and redo (⌘Z / ⇧⌘Z), Open, New, a `?` that starts the
+  tour, whether the system is ready to export, and Export.
+- **Tour**: a four-step walk through keys, channels, the inspector and export.
+  It runs the first time you reach the editor and any time from the `?`.
+- **Opening files**: press Open, or drop an `.ME1`, a `.meu`, or both
+  anywhere, on either screen. Opening files, like New, starts a new session
+  and never overwrites the one that was open, so nothing asks you to confirm.
+  The one exception: opening the missing half of what's open (a `.meu` for a
+  system loaded from an `.ME1` alone, or the reverse) adds it to that session.
 - **Problems**: anything the ME-1 would reject is explained in plain English
   under the field (once you leave it, and announced to screen readers),
   counted in the top bar, and one click away.
 - **Export**: the Export menu saves `{CONFIG}.ME1` (for the ME1CFG folder on
   the ME-1's USB stick) and `ChannelSetup.meu` (for the ME-U), and says why
-  when it can't.
-- **Safety**: an unsaved-changes marker that tracks each file (exporting
-  only the `.ME1` doesn't hide unsaved channel names, and undoing back to
-  where you started isn't unsaved work), a confirmation before New or opened
-  files replace unsaved work, and autosave in the browser, so a reload or
-  closed tab doesn't lose anything. Notifications about errors stay until
-  dismissed.
+  when it can't. "Unsaved changes" means not exported yet, and tracks each
+  file: exporting only the `.ME1` doesn't hide unsaved channel names, and
+  undoing back to where you started isn't unsaved work.
+
+The typeface is [Allo](https://allo.joshpuckett.me/) by Josh Puckett, served
+from `public/fonts` under the SIL Open Font License (`Allo-OFL.txt` beside
+it).
 
 Editing a loaded file changes only what you edit: the export is written over
 the original, so everything the editor doesn't show is kept.
@@ -63,29 +78,33 @@ shorthand props only), and [Jotai](https://jotai.org) for state.
 ```
 src
 ├── main.tsx             Tamagui provider, follows the system colour scheme
-├── App.tsx              the one page: top bar, notices, keys, inspector, channels
-├── styles.css           surfaces, the page layout, focus rings, touch sizes
+├── App.tsx              Home or the editor: top bar, keys, inspector, channels, tour
+├── styles.css           colours, type weights, the page layout, focus rings, touch sizes
 ├── components/
-│   ├── TopBar.tsx       config name, undo/redo, open, new, problems, export
+│   ├── Home.tsx, SessionList.tsx    the home screen and the list of sessions
+│   ├── TopBar.tsx       wordmark, config name, undo/redo, open, new, tour, problems, export
 │   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout
 │   ├── Inspector.tsx    editor for the selected key
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key
 │   ├── Fader.tsx        level fader (a native range input on the fader law)
-│   ├── Intro.tsx, Notice.tsx                      notices above the workspace
+│   ├── Tour.tsx         the guided walk through the editor
 │   ├── OpenFiles.tsx, WindowDrop.tsx              opening and dropping files
+│   ├── LoadNotice.tsx, Notice.tsx                 files that couldn't be opened
 │   ├── ExportMenu.tsx, ProblemsButton.tsx, Menu.tsx   top bar menus (popover)
 │   ├── ConfirmDialog.tsx modal confirmation (native <dialog>)
 │   ├── FieldError.tsx, Toasts.tsx
-│   └── ui.tsx           Action (the shared button), Panel, PanelTitle, TypeDot
+│   └── ui.tsx           Action (the shared button), Panel, PanelTitle, Card
 └── lib
-    ├── store.ts         Jotai atoms: the system, history, selection, toasts
+    ├── store.ts         Jotai atoms: the screen, the system, history, selection, opening files
     ├── edit.ts          pure edits on a system, including pickChannel
-    ├── files.ts         reading dropped files, downloading exports
+    ├── example.ts       the built-in example band
+    ├── files.ts         reading files, downloading exports
     ├── messages.ts      plain-English problems
-    ├── session.ts       autosave and restore
+    ├── session.ts       sessions: saved as you go, listed, reopened
     ├── shortcuts.ts     undo/redo keys
     ├── announce.ts      messages for screen readers
-    └── theme.ts         accent and key-type colours
+    └── theme.ts         the typeface and the key colours
+public/fonts             Allo (variable WOFF2) and its licence
 test
-└── edit.test.ts         the pure edits
+└── edit.test.ts         the pure edits and the example
 ```
