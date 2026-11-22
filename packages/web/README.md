@@ -5,7 +5,8 @@ built on [`@mcmillan/me1-mate-core`](../core). Everything runs in the browser;
 files never leave the machine.
 
 Live at <https://me1-mate.msd.audio/>, deployed to GitHub Pages by
-`.github/workflows/pages.yml` on every push to `main`. The custom domain is
+`.github/workflows/ci.yml` on every push to `main`, once the checks and the
+end-to-end tests have passed. The custom domain is
 set in the repo's Pages settings, with its DNS record kept in the infra repo.
 
 The app has two screens.
@@ -68,8 +69,21 @@ the original, so everything the editor doesn't show is kept.
 pnpm dev        # from the repo root, or `pnpm --filter @mcmillan/me1-mate-web dev`
 pnpm build      # production build into packages/web/dist
 pnpm --filter @mcmillan/me1-mate-web test   # unit tests for src/lib
+pnpm e2e        # end-to-end tests of the production build (from the repo root)
+pnpm e2e --project webkit       # one browser: chromium, firefox, webkit, iphone, pixel
 BASE_PATH=/sub/ pnpm build      # to serve from a sub-path instead of a domain's root
 ```
+
+The end-to-end tests (`e2e/`, Playwright) build the editor and serve it with
+`vite preview` on port 4317, then run every check in Chromium, Firefox and
+WebKit on a desktop window and on an iPhone and a Pixel: the journeys (Home,
+picking channels, opening and byte-exact exporting, sessions, the tour, the
+keyboard), the layout at six window sizes in both colour schemes, an axe scan
+of every screen and dialog, ARIA snapshots of each region, and what a screen
+reader says (Guidepup's virtual screen reader everywhere, real VoiceOver on
+CI's macOS runner via `playwright.voiceover.config.ts`). Reports and traces go
+to `e2e-results/`. Install the browsers once with
+`pnpm --filter @mcmillan/me1-mate-web exec playwright install chromium firefox webkit`.
 
 ## Stack
 
@@ -109,4 +123,10 @@ src
 public/fonts             Allo (variable WOFF2) and its licence
 test
 └── edit.test.ts         the pure edits and the example
+e2e
+├── helpers.ts           the page fixture (empty storage, tour seen, no page errors) and locators
+├── home, picks, files, sessions, tour, layout .spec.ts   the journeys and the layout
+├── a11y.spec.ts         axe scans and ARIA snapshots (a11y.spec.ts-snapshots/)
+├── screen-reader.spec.ts   what Guidepup's virtual screen reader hears
+└── voiceover.spec.ts    real VoiceOver, macOS only (playwright.voiceover.config.ts)
 ```

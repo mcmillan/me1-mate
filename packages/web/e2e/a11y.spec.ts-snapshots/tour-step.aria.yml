@@ -1,0 +1,6 @@
+- dialog "Keys":
+    - heading "Keys" [level=2]
+    - text: 1 of 4
+    - paragraph: /These are the \d+ keys on your ME-1\. Pick a key to work on it\./
+    - button "Skip tour"
+    - button "Next"

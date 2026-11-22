@@ -11,6 +11,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "e2e": "pnpm --filter @mcmillan/me1-mate-core build && pnpm --filter @mcmillan/me1-mate-web e2e",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",

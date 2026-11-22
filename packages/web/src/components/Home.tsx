@@ -74,7 +74,7 @@ const HOME_CSS = `
 .home-ring::after { content: ""; position: absolute; inset: -6px; border: 2.5px solid var(--ink); border-radius: 12px; }
 
 .home-chips { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px 10px; inline-size: 100%; max-inline-size: 236px; }
-.home-chip { position: relative; box-sizing: border-box; display: grid; place-items: center; aspect-ratio: 1; border: 1.5px solid color-mix(in oklab, var(--line) 55%, var(--muted)); border-radius: 50%; color: var(--muted); font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1; }
+.home-chip { position: relative; box-sizing: border-box; display: grid; place-items: center; aspect-ratio: 1; border: 1.5px solid color-mix(in oklab, var(--line) 55%, var(--muted)); border-radius: 50%; color: color-mix(in oklab, var(--muted) 80%, var(--ink)); font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1; }
 .home-chip[data-on] { border-color: transparent; background: var(--k); color: var(--on-key); font-weight: var(--w-strong); }
 .home-chip.home-ring::after { inset: -5.5px; border-radius: 50%; }
 

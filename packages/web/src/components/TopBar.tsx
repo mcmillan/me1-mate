@@ -173,8 +173,10 @@ const CSS_TEXT = `
 const HOME = 'Home';
 
 /**
- * The wordmark is the way home: a button named for where it goes. The page's heading is beside it, for screen
- * readers only, so the heading isn't named "Home".
+ * The wordmark is the way home: a button named for what it shows and where it
+ * goes, so someone using voice control can say the words they see. The page's
+ * heading is beside it, for screen readers only, so the heading isn't named
+ * "Home".
  */
 const Brand = ({ tip }: { readonly tip: string }) => {
   const goHome = useSetAtom(goHomeAtom);
@@ -184,7 +186,7 @@ const Brand = ({ tip }: { readonly tip: string }) => {
       <button
         type="button"
         className="display top-brand"
-        aria-label={HOME}
+        aria-label={`ME-1 Mate: ${HOME}`}
         onClick={() => goHome()}
         {...((NATIVE_HINTS ? { interestfor: tip } : { title: HOME }) as Record<string, string>)}
       >

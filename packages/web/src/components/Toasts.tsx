@@ -240,8 +240,9 @@ export const Toasts = () => {
           <ToastItem key={t.id} toast={t} paused={!open} onDismiss={close} />
         ))}
       </section>
-      {liveText ? <p className="toasts-sr">Notifications</p> : null}
-      <div className="toasts-sr" aria-live="polite">
+      {/* Where ariaNotify is missing (Firefox, Safari). A named status, not a loose
+          paragraph beside it, so nothing sits outside the page's landmarks. */}
+      <div className="toasts-sr" role="status" aria-label="Notifications" aria-live="polite">
         {liveText}
       </div>
     </>

@@ -1,0 +1,28 @@
+- main:
+    - heading "ME-1 Mate" [level=1]
+    - paragraph: Set up the keys of an Allen & Heath ME-1 personal mixer, and the channel names of its ME-U hub, in your browser.
+    - region "Ways to begin":
+        - heading "Ways to begin" [level=2]
+        - list:
+            - listitem:
+                - button "Open files"
+                - paragraph: An .ME1, a .meu or both. You can also drop them anywhere on this page.
+            - listitem:
+                - button "Start new"
+                - paragraph: A blank ME-1 and ME-U, to set up from scratch.
+            - listitem:
+                - button "Try the example"
+                - paragraph: A made-up band, to see a filled-in system.
+        - group: ❯ Where do I find these files?
+    - region "How it works":
+        - heading "How it works" [level=2]
+        - list:
+            - listitem:
+                - heading "Pick a key" [level=3]
+                - paragraph: /The ME-1 has \d+ keys\. Choose the one you want to set up\./
+            - listitem:
+                - heading "Pick its channels" [level=3]
+                - paragraph: Press channel numbers to give them to the key. A key can play one channel or a group.
+            - listitem:
+                - heading "Set levels and export" [level=3]
+                - paragraph: Give the key a label, set its levels, then export the .ME1 and the .meu.

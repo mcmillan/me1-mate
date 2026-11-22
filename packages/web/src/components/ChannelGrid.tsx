@@ -808,7 +808,9 @@ const Pick = ({
       String(!pickable),
     );
   }, [pickable]);
-  const numbers = linked ? `Channels ${channel} and ${channel + 1}` : `Channel ${channel}`;
+  // The name starts with the numbers as they're shown, so voice control can use them.
+  const shown = linked ? `${channel}–${channel + 1}` : String(channel);
+  const numbers = `${linked ? 'Channels' : 'Channel'} ${shown}`;
   const [owner, ...others] = uses;
   return (
     <Action
@@ -828,7 +830,7 @@ const Pick = ({
       style={owner && keyStyle(owner.index)}
       onPress={() => onPick(channel)}
     >
-      <span className="ch-num">{linked ? `${channel}–${channel + 1}` : channel}</span>
+      <span className="ch-num">{shown}</span>
       {others.length > 0 && (
         <span className="ch-dots" aria-hidden="true">
           {others.map((use) => (
@@ -859,7 +861,8 @@ const Tags = ({ channel, uses, selected, stop, onSelectKey }: TagsProps) =>
     <div className="ch-tags">
       {uses.map((use) => {
         const current = use.index === selected;
-        const label = `Used by key ${use.index + 1}, ${use.label}${current ? ' (selected)' : ': select it'}`;
+        // The key's number as the marker shows it (two digits), for voice control.
+        const label = `Used by key ${String(use.index + 1).padStart(2, '0')}, ${use.label}${current ? ' (selected)' : ': select it'}`;
         return (
           <Action
             key={use.index}

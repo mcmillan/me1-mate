@@ -12,7 +12,7 @@ const CSS = `
 export const Wordmark = () => (
   <span className="wm" aria-hidden="true">
     <style>{CSS}</style>
-    <span className="wm-model">ME-1</span>
-    <span className="wm-mate">Mate</span>
+    {/* The space doesn't render in the flex box, but makes the text read "ME-1 Mate". */}
+    <span className="wm-model">ME-1</span> <span className="wm-mate">Mate</span>
   </span>
 );

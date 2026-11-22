@@ -28,4 +28,11 @@ pnpm install
 pnpm check      # lint, typecheck, test
 pnpm build
 pnpm dev        # run the web editor at http://localhost:5173
+pnpm e2e        # end-to-end tests of the production build, in every browser
 ```
+
+The first `pnpm e2e` needs Playwright's browsers:
+`pnpm --filter @mcmillan/me1-mate-web exec playwright install chromium firefox webkit`.
+CI (`.github/workflows/ci.yml`) runs `pnpm check` and the end-to-end suite on
+every push and pull request, and deploys the editor from `main` only when both
+pass.

@@ -1,0 +1,198 @@
+name: CI
+
+# Every push and pull request: lint, typecheck and unit tests, then the
+# end-to-end suite against the production build in Chromium, Firefox and
+# WebKit (desktop and phone). On main, the web editor deploys to GitHub Pages
+# only once both have passed. Real VoiceOver runs on macOS alongside, and
+# doesn't hold up a deploy.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request replaces the run in progress; runs on main
+# always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Installs pnpm (version from packageManager), caches its store, and runs
+      # the install.
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+          run_install: |
+            args: [--frozen-lockfile]
+
+      # The editor imports the library's build output, and its typecheck reads
+      # the library's built types, so build first.
+      - name: Build
+        run: pnpm -r build
+
+      - name: Check
+        run: pnpm check
+
+  e2e:
+    name: e2e (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: chromium
+            projects: --project chromium --project pixel
+          - engine: firefox
+            projects: --project firefox
+          - engine: webkit
+            projects: --project webkit --project iphone
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+          run_install: |
+            args: [--frozen-lockfile]
+
+      # Browsers are cached per Playwright version and engine; the system
+      # libraries they need aren't cacheable, so they're installed either way.
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @mcmillan/me1-mate-web exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.engine }}
+
+      - name: Install ${{ matrix.engine }}
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: pnpm --filter @mcmillan/me1-mate-web exec playwright install --with-deps ${{ matrix.engine }}
+
+      - name: Install ${{ matrix.engine }}'s system dependencies
+        if: steps.browsers.outputs.cache-hit == 'true'
+        run: pnpm --filter @mcmillan/me1-mate-web exec playwright install-deps ${{ matrix.engine }}
+
+      # Builds the core, then the suite builds and serves the editor itself.
+      - name: End-to-end tests
+        run: pnpm e2e ${{ matrix.projects }}
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-report-${{ matrix.engine }}
+          path: packages/web/e2e-results/
+          retention-days: 14
+
+  voiceover:
+    name: e2e (VoiceOver)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+          run_install: |
+            args: [--frozen-lockfile]
+
+      - name: Install WebKit
+        run: pnpm --filter @mcmillan/me1-mate-web exec playwright install webkit
+
+      # Lets VoiceOver be driven by automation, then fetches the assets this
+      # version of @guidepup/guidepup needs. Run from the package that uses it.
+      - name: Set up VoiceOver for automation
+        working-directory: packages/web
+        run: |
+          pnpm dlx @guidepup/setup@0.29.3 setup --ci
+          pnpm dlx @guidepup/setup@0.29.3 install voiceover
+
+      - name: Build the core
+        run: pnpm --filter @mcmillan/me1-mate-core build
+
+      - name: VoiceOver tests
+        run: pnpm --filter @mcmillan/me1-mate-web e2e:voiceover
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-report-voiceover
+          path: packages/web/e2e-results/
+          retention-days: 14
+
+  pages:
+    needs: [check, e2e]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+          run_install: |
+            args: [--frozen-lockfile]
+
+      - id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Build
+        run: pnpm -r build
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: packages/web/dist
+
+  deploy:
+    needs: pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # One deployment at a time; don't cancel one that's already publishing.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

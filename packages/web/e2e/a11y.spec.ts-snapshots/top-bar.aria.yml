@@ -1,0 +1,21 @@
+- banner:
+    - heading "ME-1 Mate" [level=1]
+    - 'button "ME-1 Mate: Home"'
+    - textbox "Config name, up to 8 characters; the ME-1 shows it as the config's name":
+        - /placeholder: NAME
+        - text: JOSEPH
+    - status
+    - button "Show me around"
+    - toolbar "Editor":
+        - group "History":
+            - button "Undo (⌘Z)" [disabled]
+            - button "Redo (⇧⌘Z)" [disabled]
+        - separator
+        - group "Files":
+            - button "Open"
+            - button "New"
+        - separator
+        - group "Export":
+            - status: Ready to export
+            - button "Export"
+    - status

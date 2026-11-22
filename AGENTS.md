@@ -148,6 +148,28 @@ make sure every export is described and nothing described is gone.
 The web package's unit tests (`packages/web/test`) cover the pure edits in
 `lib/edit.ts`; add a case when you add or change one.
 
+The end-to-end suite (`packages/web/e2e`, Playwright) drives the production
+build (`vite preview` on port 4317) in Chromium, Firefox and WebKit at
+1280×720, and on an iPhone (WebKit) and a Pixel (Chromium) with touch and
+`hover: none`. Run it with `pnpm e2e` (add `--project webkit` and so on to
+narrow it); it's separate from `pnpm check` to keep that fast. CI runs it on
+every push and pull request, and the Pages deploy waits for it, so a red suite
+never ships. When behaviour changes, change or add a case in the spec that
+covers it in the same change: `home`, `picks`, `files` (opening, editing,
+problems, byte-exact exports), `sessions`, `tour`, `layout` (sizes, schemes,
+target sizes, the 1280×720 fit), `a11y` (axe in both schemes, and ARIA
+snapshots of each region) and `screen-reader` (Guidepup's virtual screen
+reader). Tag a test `@desktop` when it needs a wide window and `@touch` when
+it's about phones; don't skip one to go green. Update the ARIA snapshots
+(`pnpm e2e --project chromium --update-snapshots`) only when the accessible
+tree changes on purpose, and read the diff. Find text fields with
+`getByRole('textbox', …)`, not `getByLabel`: in Playwright's Firefox a
+`getByLabel` lookup followed by an axe scan crashes the page.
+
+`voiceover.spec.ts` drives real VoiceOver through Guidepup on CI's macOS
+runner (`pnpm --filter @mcmillan/me1-mate-web e2e:voiceover`); it takes over
+VoiceOver, so don't run it on a Mac you're using.
+
 Fixtures in `packages/core/test/fixtures` are real files; don't edit them. Add
 a fixture when you get a file showing something new (an Aux Input key, a
 non-centre pan, a decoded settings field) and add an assertion for what it shows. Snapshot
