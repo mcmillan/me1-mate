@@ -100,6 +100,18 @@ make sure every export is described and nothing described is gone.
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,
   `sess-`, `tour-`, `wm-`).
 - Everything runs in the browser; nothing is uploaded.
+- It works offline after one visit. The service worker (`src/sw.js`, written
+  into the build with its precache list by the plugin in `vite.config.ts`)
+  precaches every built file except those `NOT_PRECACHED` names, fetches the
+  page network-first and everything else cache-first. Keep it that way: the
+  app must not depend on another origin at run time (it couldn't load
+  offline), new files the app needs must land in the build output, and the
+  worker must never reload a page (someone may be mid-edit). Only the build
+  registers it. The icons and link preview are drawn by
+  `scripts/render-images.ts`: change the script and rerun it, never edit the
+  PNGs by hand. `e2e/offline.spec.ts` and `e2e/page.spec.ts` check offline
+  use and the crawlable HTML; keep `index.html`'s static `#root` content true
+  to Home.
 - Use `Action` (`components/ui.tsx`) for every button: `primary` is the ink
   pill, `subtle` the outlined pill, `ghost` chrome-less.
 - Tamagui 3 has no `hoverStyle`/`pressStyle`: use conditional values

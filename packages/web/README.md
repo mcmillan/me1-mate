@@ -62,6 +62,52 @@ it).
 Editing a loaded file changes only what you edit: the export is written over
 the original, so everything the editor doesn't show is kept.
 
+## Offline and installable
+
+After one visit online the editor opens and works with no network (a laptop
+at a venue with no wifi), and browsers that support it offer to install it as
+an app (`public/manifest.webmanifest`).
+
+- **The service worker** (`src/sw.js`) is written into the build as `sw.js`
+  by the `serviceWorker` plugin in `vite.config.ts`, with the list of every
+  built file to precache (the page, scripts, styles, the font, the icons and
+  the manifest; not the link preview image or the crawler files) and a
+  version hashed from their contents. Only the build registers it
+  (`main.tsx`); the dev server has none.
+- **Updates:** the page itself is fetched network-first, so a visit online
+  always gets the latest deploy, and a new build's worker installs a fresh
+  cache, takes over at once and deletes the old one. It never reloads a page:
+  a page that's open keeps the code it loaded and picks up the new build the
+  next time it's opened. Offline (or after four seconds without an answer),
+  the cached page is used.
+- **Sessions** stay in `localStorage` and files are read in the page, so
+  nothing about them changes offline.
+
+`index.html` also carries what crawlers and link unfurlers read: a short
+description and the three steps inside `#root` (shown, plainly styled, until
+React replaces it), the canonical URL, Open Graph and Twitter card tags, and
+`SoftwareApplication` structured data. These use the absolute address
+`https://me1-mate.msd.audio/`, as do `public/robots.txt` and
+`public/sitemap.xml`; change them all if the site moves.
+
+### `public/`
+
+```
+public
+├── manifest.webmanifest   name, colours, icons; relative URLs, so it works under any base path
+├── icons/                 icon-192, icon-512 and icon-maskable-512 PNGs
+├── apple-touch-icon.png   180 px, for iOS home screens
+├── og-image.png           1200×630 link preview
+├── robots.txt, sitemap.xml
+└── fonts/                 Allo and its licence
+```
+
+The PNGs are drawn by `scripts/render-images.ts` (HTML in headless Chrome,
+with Allo and the key colours from `src/lib/theme.ts`) and committed, so the
+build needs no browser. Run `pnpm --filter @mcmillan/me1-mate-web images`
+after changing the mark or the colours. The inline SVG favicon in
+`index.html` is separate.
+
 ## Develop
 
 ```sh
@@ -69,7 +115,17 @@ pnpm dev        # from the repo root, or `pnpm --filter @mcmillan/me1-mate-web d
 pnpm build      # production build into packages/web/dist
 pnpm --filter @mcmillan/me1-mate-web test   # unit tests for src/lib
 BASE_PATH=/sub/ pnpm build      # to serve from a sub-path instead of a domain's root
+pnpm --filter @mcmillan/me1-mate-web images        # redraw the icons and link preview
+pnpm --filter @mcmillan/me1-mate-web e2e:offline   # offline and page checks in Chromium
 ```
+
+`e2e:offline` (`playwright.offline.config.ts`, specs in `e2e/`) builds the
+app and serves it with `vite preview` on port 4178, then checks that after
+one visit Home, the example and opening the fixture files all work offline,
+that Chrome finds the app installable, and that the served HTML carries the
+description, canonical URL, link preview tags and structured data. Build the
+core package first (`pnpm -r build`) and install a browser once
+(`pnpm exec playwright install chromium`).
 
 ## Stack
 
@@ -78,7 +134,8 @@ shorthand props only), and [Jotai](https://jotai.org) for state.
 
 ```
 src
-├── main.tsx             Tamagui provider, follows the system colour scheme
+├── main.tsx             Tamagui provider, follows the system colour scheme; registers the service worker
+├── sw.js                the service worker (copied into the build by vite.config.ts)
 ├── App.tsx              Home or the editor: top bar, keys, inspector, channels, tour
 ├── styles.css           colours, type weights, the page layout, focus rings, touch sizes
 ├── components/
@@ -106,7 +163,12 @@ src
     ├── shortcuts.ts     undo/redo keys
     ├── announce.ts      messages for screen readers
     └── theme.ts         the typeface and the key colours
-public/fonts             Allo (variable WOFF2) and its licence
+public                   manifest, icons, link preview, robots.txt, sitemap, fonts (see above)
+scripts
+└── render-images.ts     draws the icons and the link preview into public/
 test
 └── edit.test.ts         the pure edits and the example
+e2e
+├── offline.spec.ts      works offline after one visit
+└── page.spec.ts         manifest, installability, crawlable HTML
 ```

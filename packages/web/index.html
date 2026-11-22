@@ -8,11 +8,55 @@
       name="description"
       content="A free offline editor for Allen &amp; Heath ME-1 personal mixers: set up the keys of an ME-1 config (.ME1) and name the channels of an ME-U (.meu) in your browser."
     />
+    <link rel="canonical" href="https://me1-mate.msd.audio/" />
     <meta name="color-scheme" content="light dark" />
     <!-- Browser chrome follows the page: `--canvas` in src/styles.css. -->
     <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Crect%20width=%2732%27%20height=%2732%27%20rx=%277%27%20fill=%27%23ee5a1e%27/%3E%3Ctext%20x=%2716%27%20y=%2721.5%27%20text-anchor=%27middle%27%20font-family=%27system-ui%2Csans-serif%27%20font-weight=%27800%27%20font-size=%2714%27%20fill=%27%23fff%27%3EME1%3C/text%3E%3C/svg%3E" />
+    <!-- Installable and offline: the manifest, and icons drawn by scripts/render-images.ts. -->
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+
+    <!-- Link previews. Absolute URLs: unfurlers don't resolve relative ones. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ME-1 Mate" />
+    <meta property="og:title" content="ME-1 Mate: offline editor for Allen &amp; Heath ME-1 and ME-U" />
+    <meta
+      property="og:description"
+      content="Set up the keys of an ME-1 config and name the channels of an ME-U in your browser. Free, works offline, files never leave your computer. Not affiliated with Allen &amp; Heath."
+    />
+    <meta property="og:url" content="https://me1-mate.msd.audio/" />
+    <meta property="og:image" content="https://me1-mate.msd.audio/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="The ME-1 Mate wordmark, and the line: set up the keys of an Allen &amp; Heath ME-1 personal mixer and name its ME-U’s channels, in your browser."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ME-1 Mate: offline editor for Allen &amp; Heath ME-1 and ME-U" />
+    <meta
+      name="twitter:description"
+      content="Set up the keys of an ME-1 config and name the channels of an ME-U in your browser. Free, works offline. Not affiliated with Allen &amp; Heath."
+    />
+    <meta name="twitter:image" content="https://me1-mate.msd.audio/og-image.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "ME-1 Mate",
+        "url": "https://me1-mate.msd.audio/",
+        "description": "A free offline editor for Allen & Heath ME-1 personal mixers: set up the keys of an ME-1 config (.ME1) and name the channels of an ME-U (.meu) in your browser. Not affiliated with Allen & Heath.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any (web browser)",
+        "isAccessibleForFree": true,
+        "image": "https://me1-mate.msd.audio/og-image.png",
+        "author": { "@type": "Person", "name": "Josh McMillan", "url": "https://joshmcmillan.com" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+
     <!-- The one typeface, Allo (SIL Open Font License; see fonts/Allo-OFL.txt). -->
     <link
       rel="preload"
@@ -37,6 +81,7 @@
         color-scheme: light dark;
         --page-bg: #fbfaf8;
         --page-fg: #131316;
+        --page-muted: #6f6e78;
         background-color: var(--page-bg);
         color: var(--page-fg);
       }
@@ -44,12 +89,110 @@
         :root {
           --page-bg: #101012;
           --page-fg: #f6f5f2;
+          --page-muted: #9b9aa3;
+        }
+      }
+      /*
+        What's in #root until React replaces it: the same words as Home, laid
+        out like it, for crawlers, link unfurlers and a slow first load.
+        Weights come from styles.css (linked ahead of the script in a build),
+        and so does Tamagui's reset, which unsets p, ol and li: hence the
+        display values here.
+      */
+      body {
+        margin: 0;
+      }
+      .pre {
+        box-sizing: border-box;
+        inline-size: 100%;
+        max-inline-size: 1088px;
+        margin-inline: auto;
+        padding: clamp(28px, 7dvh, 80px) 16px 20px;
+        font-family: Allo, system-ui, sans-serif;
+        line-height: 1.45;
+      }
+      .pre h1 {
+        display: flex;
+        align-items: center;
+        gap: 0.22em;
+        margin: 0 0 0.18em;
+        font-size: clamp(3.25rem, 2rem + 5.5vw, 5.25rem);
+        font-weight: var(--w-display);
+        letter-spacing: -0.02em;
+        line-height: 1;
+      }
+      .pre-model {
+        padding: 0.1em 0.2em 0.12em;
+        border-radius: 0.14em;
+        background: #ee5a1e;
+        color: #fff;
+        font-weight: var(--w-black);
+        font-variation-settings: "ROND" 0;
+      }
+      .pre p {
+        display: block;
+        max-inline-size: 34em;
+        margin: 22px 0 0;
+        font-size: clamp(1.125rem, 1rem + 0.4vw, 1.25rem);
+        text-wrap: pretty;
+      }
+      .pre-nw {
+        white-space: nowrap;
+      }
+      .pre h2 {
+        margin: 48px 0 8px;
+        font-size: 1.375rem;
+        font-weight: var(--w-display);
+      }
+      .pre ol {
+        display: grid;
+        gap: 6px;
+        max-inline-size: 60ch;
+        margin: 0;
+        padding-inline-start: 1.4em;
+        color: var(--page-muted);
+        list-style: decimal;
+      }
+      .pre li {
+        display: list-item;
+      }
+      .pre li b {
+        color: var(--page-fg);
+        font-weight: var(--w-strong);
+      }
+      @media (min-width: 640px) {
+        .pre {
+          padding-inline: 24px;
         }
       }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="pre">
+        <h1><span class="pre-model">ME-1</span> Mate</h1>
+        <p>
+          ME-1 Mate is a free editor for the Allen &amp; Heath
+          <span class="pre-nw">ME-1</span> personal mixer. Set up the 16 keys of an
+          <span class="pre-nw">ME-1</span> config (.ME1) and name the channels of an
+          <span class="pre-nw">ME-U</span> hub (.meu), in your browser. It works offline once
+          loaded, and your files never leave your computer. Not affiliated with Allen &amp; Heath.
+        </p>
+        <h2>How it works</h2>
+        <ol>
+          <li><b>Pick a key.</b> The ME-1 has 16 keys. Choose the one you want to set up.</li>
+          <li>
+            <b>Pick its channels.</b> Press channel numbers to give them to the key. A key can play
+            one channel or a group.
+          </li>
+          <li>
+            <b>Set levels and export.</b> Give the key a label, set its levels, then export the .ME1
+            and the .meu.
+          </li>
+        </ol>
+        <noscript><p>ME-1 Mate runs in your browser and needs JavaScript turned on.</p></noscript>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

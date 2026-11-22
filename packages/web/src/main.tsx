@@ -25,8 +25,21 @@ const Root = () => {
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
 
+// Replaces the static description in index.html (there for crawlers and slow loads).
 createRoot(root).render(
   <StrictMode>
     <Root />
   </StrictMode>,
 );
+
+// Offline: the built app registers its service worker (src/sw.js); dev has none.
+// A new build takes over quietly and never reloads the page.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`, { updateViaCache: 'none' })
+      .catch(() => {
+        // Without a worker the app still works; it just needs the network to load.
+      });
+  });
+}
