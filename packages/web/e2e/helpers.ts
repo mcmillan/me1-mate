@@ -33,6 +33,10 @@ export const editorOf = (page: Page) => {
   const fileInput = page.locator('input[type=file]');
   const menuItem = (text: RegExp) =>
     page.locator('[focusgroup] button, [role=menuitem]', { hasText: text }).first();
+  /** The phone layout's top bar menu, which holds what the wide bar shows as buttons. */
+  const more = page.getByRole('button', { name: 'More', exact: true });
+  /** The phone layout's key sheet. */
+  const sheet = page.getByRole('dialog', { name: /^Key \d+$/ });
   return {
     page,
     tiles,
@@ -42,6 +46,10 @@ export const editorOf = (page: Page) => {
     button,
     menuItem,
     unsaved: page.getByText('Unsaved changes', { exact: true }),
+    more,
+    sheet,
+    /** The Keys | Channels switch of the phone layout. */
+    screenTab: (name: 'Keys' | 'Channels') => page.getByRole('tab', { name, exact: true }),
     label: textbox('Label'),
     sessions: page.getByRole('list', { name: 'Your sessions' }),
     /** The wordmark, which goes back to Home. */
@@ -54,6 +62,32 @@ export const editorOf = (page: Page) => {
         .getByRole('button', { name: type, exact: true }),
     channelName: (n: number) => textbox(`Channel ${n} name`),
     tileName: (i: number) => tiles.nth(i).getAttribute('aria-label'),
+    /**
+     * A top bar command by its button's name (`Show me around`, `Undo (⌘Z)`,
+     * `Home`…): the button on a wide bar, the item in the More menu on a phone.
+     */
+    async command(name: string | RegExp) {
+      if (await more.isVisible()) {
+        await more.click();
+        const by = typeof name === 'string' ? { name, exact: true } : { name };
+        // A menu item is a button in a native focusgroup, or a menuitem where there's none.
+        await page
+          .getByRole('menuitem', by)
+          .or(page.locator('[focusgroup~="menu"]').getByRole('button', by))
+          .filter({ visible: true })
+          .first()
+          .click();
+      } else if (name === 'Home') {
+        await button(/Home$/).click();
+      } else {
+        await button(name).click();
+      }
+    },
+    /** Back to Home: the wordmark, or on a phone the menu's Home. */
+    async goHome() {
+      await this.command('Home');
+      await expect(page.getByRole('button', { name: 'Start new' })).toBeVisible();
+    },
     /** From Home, start a blank system. */
     async startNew() {
       await button('Start new').click();

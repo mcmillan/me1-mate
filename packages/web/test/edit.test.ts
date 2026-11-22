@@ -17,6 +17,7 @@ import {
   setStereo,
 } from '../src/lib/edit.ts';
 import { example } from '../src/lib/example.ts';
+import { phonePlaceOf } from '../src/lib/layout.ts';
 
 const withKeys = (...keys: Key[]): Editable =>
   keys.reduce((system, key, i) => setKey(system, i, key), blank());
@@ -243,5 +244,25 @@ describe('isBlank', () => {
     expect(isBlank(withKeys({ type: 'auto' }))).toBe(false);
     expect(isBlank(setStereo(blank(), 1, true))).toBe(false);
     expect(isBlank(example())).toBe(false);
+  });
+});
+
+describe('phonePlaceOf', () => {
+  it("sends a key's problems to that key's sheet", () => {
+    expect(phonePlaceOf('keys[3].name')).toEqual({ screen: 'keys', key: 3 });
+    expect(phonePlaceOf('keys[12].members[0].level')).toEqual({ screen: 'keys', key: 12 });
+    expect(phonePlaceOf('keys[0]')).toEqual({ screen: 'keys', key: 0 });
+  });
+
+  it("sends a channel's problems to the Channels screen", () => {
+    expect(phonePlaceOf('channels[4].name')).toEqual({ screen: 'channels' });
+    expect(phonePlaceOf('channels[7].stereo')).toEqual({ screen: 'channels' });
+    expect(phonePlaceOf('meu.Channels[2].Name')).toEqual({ screen: 'channels' });
+  });
+
+  it('leaves problems with the whole file where they are', () => {
+    expect(phonePlaceOf('keys')).toEqual({ screen: undefined });
+    expect(phonePlaceOf('channels')).toEqual({ screen: undefined });
+    expect(phonePlaceOf('settings.version')).toEqual({ screen: undefined });
   });
 });

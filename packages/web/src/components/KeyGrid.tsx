@@ -349,6 +349,20 @@ const CSS = `
   .kg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/*
+ * The phone's home screen (\`opens\`, App.tsx): the region's title is said by
+ * the Keys | Channels switch above it, so it is left to screen readers, and
+ * the tiles grow to share the window's height, so the 16 keys fill the
+ * screen without scrolling it.
+ */
+.kg-panel[data-opens] .kg-title, .kg-sr {
+  position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.kg-panel[data-opens] .kg-grid .kg-tile {
+  min-block-size: clamp(88px, calc((100dvh - var(--phone-chrome, 176px)) / 4), 150px);
+}
+.kg-panel[data-opens] .kg-tile .kg-label { --kg-full: clamp(1.3125rem, 24cqi, 2rem); }
+
 /* A tile too narrow for "Ch 29+30" says "29+30". */
 @container kg-tile (inline-size < 56px) {
   .kg-tile .kg-lead { display: none; }
@@ -361,6 +375,7 @@ const Tile = ({
   selected,
   highlighted,
   problems,
+  opens,
   onSelect,
   onKeyDown,
   onPoint,
@@ -371,6 +386,8 @@ const Tile = ({
   selected: boolean;
   highlighted: boolean;
   problems: number;
+  /** Pressing the tile opens the key's sheet (the phone layout). */
+  opens: boolean;
   onSelect: () => void;
   onKeyDown: (e: KeyboardEvent) => void;
   /** The pointer or focus arrived on this tile (`true`) or left it. */
@@ -400,6 +417,7 @@ const Tile = ({
       role="radio"
       aria-checked={selected}
       aria-label={name}
+      aria-describedby={opens ? 'kg-opens' : undefined}
       tabIndex={selected ? 0 : -1}
       data-kind={empty ? 'empty' : key.type}
       data-highlight={highlighted ? '' : undefined}
@@ -458,8 +476,11 @@ const Tile = ({
  * a level meter, problems); selecting one opens it in the inspector and makes it the
  * key that channel picks assign to. Pointing at or focusing a tile sets
  * `highlightKeyAtom`, so the Channels region can point out its channels.
+ *
+ * With `onOpen` (the phone layout), pressing a tile also opens that key in its
+ * sheet; the arrow keys still only move the selection.
  */
-export const KeyGrid = () => {
+export const KeyGrid = ({ onOpen }: { readonly onOpen?: (index: number) => void } = {}) => {
   const system = useAtomValue(systemAtom);
   const issues = useAtomValue(issuesAtom);
   const [selected, setSelected] = useAtom(selectedKeyAtom);
@@ -469,6 +490,7 @@ export const KeyGrid = () => {
   const count = system.keys.length;
   const half = Math.ceil(count / 2);
 
+  const opens = onOpen !== undefined;
   const select = (i: number, focus = false) => {
     setSelected(i);
     if (focus) tiles.current[i]?.focus();
@@ -500,11 +522,23 @@ export const KeyGrid = () => {
   const problemsOf = (i: number) => issues.filter((x) => x.path.startsWith(`keys[${i}]`)).length;
 
   return (
-    <Panel render="section" aria-labelledby={titleId}>
+    <Panel
+      render="section"
+      aria-labelledby={titleId}
+      className="kg-panel"
+      data-opens={opens ? '' : undefined}
+    >
       <style href="kg" precedence="default">
         {CSS}
       </style>
-      <PanelTitle id={titleId}>Keys</PanelTitle>
+      <PanelTitle id={titleId} className="display kg-title">
+        Keys
+      </PanelTitle>
+      {opens && (
+        <span id="kg-opens" className="kg-sr">
+          Opens the key
+        </span>
+      )}
       <div className="kg-box">
         <div role="radiogroup" aria-label="Keys" className="kg-rows">
           {[0, half].map((from) => (
@@ -519,7 +553,11 @@ export const KeyGrid = () => {
                     selected={index === selected}
                     highlighted={index === highlight}
                     problems={problemsOf(index)}
-                    onSelect={() => select(index)}
+                    opens={opens}
+                    onSelect={() => {
+                      select(index);
+                      onOpen?.(index);
+                    }}
                     onKeyDown={onKeyDown(index)}
                     onPoint={point(index)}
                     tileRef={(el) => {

@@ -1,6 +1,9 @@
 import { expect, test } from './helpers.ts';
 
-test('sessions are kept as you go, listed on Home and reopened', async ({ editor, page }) => {
+test('sessions are kept as you go, listed on Home and reopened @desktop', async ({
+  editor,
+  page,
+}) => {
   await editor.startNew();
   await editor.pick(5).click();
   await editor.openJoseph();
@@ -23,7 +26,7 @@ test('sessions are kept as you go, listed on Home and reopened', async ({ editor
   await expect(editor.unsaved, 'and it is still unsaved').toBeVisible();
 });
 
-test('New starts at once and keeps the old session; a session can be deleted', async ({
+test('New starts at once and keeps the old session; a session can be deleted @desktop', async ({
   editor,
   page,
 }) => {
@@ -34,7 +37,7 @@ test('New starts at once and keeps the old session; a session can be deleted', a
   await editor.tiles.nth(0).click();
   await editor.typeButton(1, 'Auto').click();
   await editor.configName.fill('SCRATCH');
-  await editor.home.click();
+  await editor.goHome();
   await expect(
     editor.sessions.getByRole('button', { name: /^Open JOSEPH/ }),
     'the system New left is still listed',
@@ -53,7 +56,7 @@ test('New starts at once and keeps the old session; a session can be deleted', a
 
 test('a blank system is not kept as a session', async ({ editor, page }) => {
   await editor.button('Try the example').click();
-  await editor.home.click();
+  await editor.goHome();
   const items = editor.sessions.getByRole('listitem');
   await expect(items).toHaveCount(1);
   await editor.startNew();
@@ -64,6 +67,6 @@ test('a blank system is not kept as a session', async ({ editor, page }) => {
 
 test('delete buttons show at rest where there is no hover @touch', async ({ editor }) => {
   await editor.button('Try the example').click();
-  await editor.home.click();
+  await editor.goHome();
   await expect(editor.sessions.getByRole('button', { name: /^Delete / })).toHaveCSS('opacity', '1');
 });

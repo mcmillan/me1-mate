@@ -18,7 +18,8 @@ in the browser as you go; the last 12 are listed with a small picture of their
 keys, when they were edited, and whether they've been exported. Open one to
 carry on, or delete it.
 
-**The editor** has everything on one page:
+**The editor**, from 700px wide, has everything on one page (a phone gets
+the same parts arranged for its screen; see below):
 
 - **Keys**: the 16 keys laid out like the ME-1's, two rows of eight. Every
   key has its own colour, and everything that belongs to a key wears it: its
@@ -41,7 +42,9 @@ carry on, or delete it.
   file's name), a `?` that starts the tour, undo and redo (⌘Z / ⇧⌘Z), Open,
   New, whether the system is ready to export, and Export.
 - **Tour**: a four-step walk through keys, channels, the inspector and export.
-  It runs the first time you reach the editor and any time from the `?`.
+  It runs the first time you reach the editor and any time from the `?`
+  (on a phone, from the menu, pointing at the phone's key screen, the Keys |
+  Channels switch and Export).
 - **Opening files**: press Open, or drop an `.ME1`, a `.meu`, or both
   anywhere, on either screen. Opening files, like New, starts a new session
   and never overwrites the one that was open, so nothing asks you to confirm.
@@ -55,6 +58,29 @@ carry on, or delete it.
   when it can't. "Unsaved changes" means not exported yet, and tracks each
   file: exporting only the `.ME1` doesn't hide unsaved channel names, and
   undoing back to where you started isn't unsaved work.
+
+**On a phone** (narrower than 700px) the editor is the same parts, arranged
+so nothing is a long scroll away:
+
+- **The key screen** is home: the 16 keys fill the screen, with no scrolling.
+  Tap a key to open it.
+- **The key sheet** rises from the bottom and nearly fills the screen, with
+  everything about that key in one place: its colour, number, type and label
+  at the top (which stays put while the rest scrolls), ‹ › to step to the
+  keys either side, and Done; then its type, label and level, a group's
+  channels and their levels; and then the channel picker, a tile per channel
+  (two to a pair), in the colour of the key that plays it and with that key's
+  number, ringed where the open key plays it. Picking works as in Channels.
+  Done, Escape, the back gesture or a tap on the strip above close it, and
+  the key you ended on has focus.
+- **The Channels screen**, chosen with the Keys | Channels switch under the
+  top bar, is the channel grid for naming channels and linking pairs, with
+  no key selected; a key's number on a channel opens that key.
+- **The top bar** is calmer: the config's name, the problems count when
+  there are any, Export, and a menu (`⋯`) with Undo, Redo, Open files, Start
+  new, Show me around and Home.
+- **Problems** in the list open the key's sheet at the field, or the
+  Channels screen for a channel's.
 
 The typeface is [Allo](https://allo.joshpuckett.me/) by Josh Puckett, served
 from `public/fonts` under the SIL Open Font License (`Allo-OFL.txt` beside
@@ -142,15 +168,17 @@ shorthand props only), and [Jotai](https://jotai.org) for state.
 src
 ├── main.tsx             Tamagui provider, follows the system colour scheme; registers the service worker
 ├── sw.js                the service worker (copied into the build by vite.config.ts)
-├── App.tsx              Home or the editor: top bar, keys, inspector, channels, tour
+├── App.tsx              Home or the editor: top bar, then the one page or the phone layout, tour
 ├── styles.css           colours, type weights, the page layout, focus rings, touch sizes
 ├── components/
 │   ├── Home.tsx, SessionList.tsx    the home screen and the list of sessions
-│   ├── TopBar.tsx       wordmark, config name, undo/redo, open, new, tour, problems, export
+│   ├── TopBar.tsx       wordmark, config name, undo/redo, open, new, tour, problems, export; the phone's bar and menu
+│   ├── ScreenTabs.tsx   the phone's Keys | Channels switch (a tablist)
+│   ├── KeySheet.tsx     the phone's key sheet (native <dialog>): the inspector and channel picker
 │   ├── Wordmark.tsx     the ME-1 Mate logo, ME-1 on an orange plate
 │   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout
-│   ├── Inspector.tsx    editor for the selected key
-│   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key
+│   ├── Inspector.tsx    editor for the selected key (also the key sheet's body)
+│   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key (all, or the phone's pick or names part)
 │   ├── Fader.tsx        level fader (a native range input on the fader law)
 │   ├── Tour.tsx         the guided walk through the editor
 │   ├── OpenFiles.tsx, WindowDrop.tsx              opening and dropping files
@@ -160,7 +188,8 @@ src
 │   ├── FieldError.tsx, Toasts.tsx
 │   └── ui.tsx           Action (the shared button), Panel, PanelTitle, Card
 └── lib
-    ├── store.ts         Jotai atoms: the screen, the system, history, selection, opening files
+    ├── store.ts         Jotai atoms: the screen, the system, history, selection, the phone's screen and sheet, opening files
+    ├── layout.ts        the phone layout: its width, and where a problem's field is in it
     ├── edit.ts          pure edits on a system, including pickChannel
     ├── example.ts       the built-in example band
     ├── files.ts         reading files, downloading exports
@@ -173,10 +202,11 @@ public                   manifest, icons, link preview, robots.txt, sitemap, fon
 scripts
 └── render-images.ts     draws the icons and the link preview into public/
 test
-└── edit.test.ts         the pure edits and the example
+└── edit.test.ts         the pure edits, the example, and where problems live on a phone
 e2e
 ├── helpers.ts           the page fixture (empty storage, tour seen, no page errors) and locators
 ├── home, picks, files, sessions, tour, layout .spec.ts   the journeys and the layout
+├── phone.spec.ts        the phone layout: key sheet, Channels screen, menu, tour, problems, fit
 ├── a11y.spec.ts         axe scans of every screen and dialog
 ├── offline.spec.ts      works offline after one visit (Chromium)
 └── page.spec.ts         manifest, installability, crawlable HTML

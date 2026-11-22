@@ -14,12 +14,12 @@ test('blank home fits 1280×720 @desktop', async ({ page }) => {
 test('the example opens a filled-in system, and Home lists it', async ({ editor }) => {
   await editor.button('Try the example').click();
   await expect(editor.tiles.nth(0)).toHaveAttribute('aria-label', /Drums/);
-  await editor.home.click();
+  await editor.goHome();
   await expect(editor.sessions).toBeVisible();
   await expect(editor.sessions.getByRole('listitem')).toHaveCount(1);
 });
 
-test('Start new opens the editor: 16 keys, channels and inspector on one page', async ({
+test('Start new opens the editor: 16 keys, channels and inspector on one page @desktop', async ({
   editor,
   page,
 }) => {

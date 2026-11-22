@@ -13,6 +13,18 @@ const checkLayout = async (page: Page, info: TestInfo, tag: string) => {
   await page.screenshot({ path: info.outputPath(`home-${tag}.png`), fullPage: true });
   await editor.openJoseph();
   await editor.tiles.nth(1).click();
+  // At rest: on a phone the key opens in a sheet that slides up; measure once it has.
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.timeline === document.timeline)
+          .map((a) => a.finished.catch(() => {})),
+      ),
+      new Promise((done) => setTimeout(done, 2000)),
+    ]),
+  );
 
   const stray = await page.evaluate(() =>
     [...document.querySelectorAll('dialog:not([open]), [popover]:not(:popover-open)')]

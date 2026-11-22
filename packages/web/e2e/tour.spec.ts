@@ -2,7 +2,7 @@ import { expect, TOUR_KEY, test } from './helpers.ts';
 
 test('the tour walks from the keys to export and changes nothing', async ({ editor, page }) => {
   await editor.startNew();
-  await editor.button('Show me around').click();
+  await editor.command('Show me around');
   const step = page.getByRole('dialog').filter({ visible: true });
   await expect(step, 'it opens on the keys').toContainText('16 keys');
   for (let i = 0; i < 3; i++) await step.getByRole('button', { name: 'Next' }).click();
@@ -23,7 +23,7 @@ test.describe('first visit', () => {
     await step.getByRole('button', { name: /Skip/ }).click();
     await expect(step).toHaveCount(0);
     expect(await page.evaluate((key) => localStorage.getItem(key), TOUR_KEY)).toBe('done');
-    await editor.home.click();
+    await editor.goHome();
     await editor.startNew();
     await expect(page.getByRole('dialog').filter({ visible: true })).toHaveCount(0);
   });

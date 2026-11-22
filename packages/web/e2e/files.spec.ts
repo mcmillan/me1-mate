@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import { parseConfig, parseME1Config } from '@mcmillan/me1-mate-core';
 import { brokenFile, expect, FIXTURES, fits, scratch, test } from './helpers.ts';
 
-test('opening files over unsaved work never asks, and loads them', async ({ editor, page }) => {
+test('opening files over unsaved work never asks, and loads them @desktop', async ({
+  editor,
+  page,
+}) => {
   await editor.startNew();
   await editor.pick(5).click();
   await expect(editor.unsaved).toBeVisible();
@@ -33,7 +36,7 @@ test('the loaded editor fits 1280×720, inspector beside the keys @desktop', asy
   expect(ch.x).toBeLessThan(insp.x);
 });
 
-test('typing in one field undoes in one step, and redoes', async ({ editor }) => {
+test('typing in one field undoes in one step, and redoes @desktop', async ({ editor }) => {
   await editor.openJoseph();
   await editor.tiles.nth(0).click();
   const before = await editor.label.inputValue();
@@ -46,7 +49,7 @@ test('typing in one field undoes in one step, and redoes', async ({ editor }) =>
   await expect(editor.label).toHaveValue('Drm');
 });
 
-test('an invalid label is explained, blocks export, and the problems list finds it', async ({
+test('an invalid label is explained, blocks export, and the problems list finds it @desktop', async ({
   editor,
   page,
 }) => {
@@ -68,7 +71,7 @@ test('an invalid label is explained, blocks export, and the problems list finds 
   await expect(editor.label, 'the problems list jumps to the field').toBeFocused();
 });
 
-test('exports are byte-exact apart from the edits', async ({ editor }) => {
+test('exports are byte-exact apart from the edits @desktop', async ({ editor }) => {
   const dir = scratch();
   await editor.openJoseph();
   await editor.tiles.nth(0).click();
@@ -97,7 +100,7 @@ test('exports are byte-exact apart from the edits', async ({ editor }) => {
   ).toEqual([]);
 });
 
-test('an untouched export is identical to the file loaded', async ({ editor }) => {
+test('an untouched export is identical to the file loaded @desktop', async ({ editor }) => {
   const dir = scratch();
   await editor.openJoseph();
   await editor.tiles.nth(1).click();
@@ -107,14 +110,14 @@ test('an untouched export is identical to the file loaded', async ({ editor }) =
   expect(readFileSync(meu.path).equals(readFileSync(join(FIXTURES, 'JOSEPH.meu')))).toBe(true);
 });
 
-test('selecting keys and tabbing around makes no edit', async ({ editor, page }) => {
+test('selecting keys and tabbing around makes no edit @desktop', async ({ editor, page }) => {
   await editor.openJoseph();
   for (const i of [3, 8, 15, 0]) await editor.tiles.nth(i).click();
   for (let i = 0; i < 14; i++) await page.keyboard.press('Tab');
   await expect(editor.unsaved).toBeHidden();
 });
 
-test('a new system exports and parses', async ({ editor }) => {
+test('a new system exports and parses @desktop', async ({ editor }) => {
   await editor.startNew();
   await editor.tiles.nth(0).click();
   await editor.typeButton(1, 'Auto').click();
@@ -125,7 +128,7 @@ test('a new system exports and parses', async ({ editor }) => {
   expect(back.isOk && back.value.keys[0]?.type).toBe('auto');
 });
 
-test("a broken file is explained, not asked about, and the work's still there", async ({
+test("a broken file is explained, not asked about, and the work's still there @desktop", async ({
   editor,
   page,
 }) => {

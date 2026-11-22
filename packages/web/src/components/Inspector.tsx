@@ -93,6 +93,8 @@ const CSS = `
 .insp .insp-step[aria-disabled="true"] {
   background: transparent; color: color-mix(in oklab, var(--insp-on) 30%, transparent); cursor: default;
 }
+/* Done, in the key sheet: the steps' disc, stretched to a pill for its word. */
+.insp .insp-done { inline-size: auto; padding-inline: 14px; font-size: 0.875rem; font-weight: var(--w-strong); &&&& { padding: 0 14px; } }
 /* On a key's colour the ring gets a band of the card's colour inside it, so it shows on any of them. */
 .insp .insp-step:focus-visible { box-shadow: 0 0 0 2px var(--card); }
 /*
@@ -452,10 +454,12 @@ const Hero = ({
   system,
   index,
   onStep,
+  onClose,
 }: {
   system: Editable;
   index: number;
   onStep: (to: number) => void;
+  onClose?: (() => void) | undefined;
 }) => {
   const key = system.keys[index];
   if (!key) return null;
@@ -487,6 +491,12 @@ const Hero = ({
             off={index >= system.keys.length - 1}
             onPress={() => onStep(index + 1)}
           />
+          {onClose && (
+            <Action className="insp-step insp-done" kind="ghost" onPress={onClose}>
+              {/* In a span, so it takes the hero's colour rather than Tamagui's text colour. */}
+              <span>Done</span>
+            </Action>
+          )}
         </div>
       </div>
       {/* Keyed by the key, so the label rises in when another is selected and stays put while it's typed. */}
@@ -676,10 +686,12 @@ const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
 const PlaysChannel = ({
   index,
   channel,
+  where,
   onGroup,
 }: {
   index: number;
   channel: number;
+  where: string;
   onGroup: () => void;
 }) => {
   const system = useAtomValue(systemAtom);
@@ -707,7 +719,7 @@ const PlaysChannel = ({
         </span>
       </div>
       <div id={`${id}-more`}>
-        <Hint>Pick another channel in Channels to change it.</Hint>
+        <Hint>Pick another channel {where} to change it.</Hint>
         <FieldError path={path} />
       </div>
       <Action kind="subtle" className="insp-make target" onPress={onGroup}>
@@ -718,7 +730,15 @@ const PlaysChannel = ({
 };
 
 /** A group's channels, each with its level in the group and a way out of it. */
-const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) => {
+const PlaysGroup = ({
+  index,
+  keyValue: key,
+  where,
+}: {
+  index: number;
+  keyValue: Key;
+  where: string;
+}) => {
   const system = useAtomValue(systemAtom);
   const edit = useSetAtom(editAtom);
   const root = useRef<HTMLDivElement>(null);
@@ -759,8 +779,8 @@ const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
             +
           </span>
           <p className="insp-copy">
-            <strong>No channels yet.</strong> Pick channels in Channels to add them to this group.
-            Each gets its own level here.
+            <strong>No channels yet.</strong> Pick channels {where} to add them to this group. Each
+            gets its own level here.
           </p>
         </div>
       ) : (
@@ -829,8 +849,18 @@ const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
  * ME-1 shows it, its type, and by type its label, level and then what it
  * plays, in that order for every type. Channels are picked in the Channels
  * panel; this shows the result and holds the rest.
+ *
+ * In the phone's key sheet the channel picker comes inside the card, after
+ * the rest (`picker`), the hero stays at the top while the sheet scrolls,
+ * and it has a Done button (`onClose`).
  */
-export const Inspector = () => {
+export const Inspector = ({
+  picker,
+  onClose,
+}: {
+  readonly picker?: ReactNode;
+  readonly onClose?: () => void;
+} = {}) => {
   const system = useAtomValue(systemAtom);
   const edit = useSetAtom(editAtom);
   const [index, setIndex] = useAtom(selectedKeyAtom);
@@ -849,6 +879,7 @@ export const Inspector = () => {
 
   if (!key) return null;
   const n = index + 1;
+  const where = picker ? 'below' : 'in Channels';
 
   return (
     <Card
@@ -862,7 +893,7 @@ export const Inspector = () => {
       <style href="insp" precedence="default">
         {CSS}
       </style>
-      <Hero system={system} index={index} onStep={setIndex} />
+      <Hero system={system} index={index} onStep={setIndex} onClose={onClose} />
 
       <div className="insp-body" ref={body}>
         <TypeSwitch index={index} type={key.type} />
@@ -871,7 +902,7 @@ export const Inspector = () => {
           <div className="insp-plays">
             <div className="insp-invite">
               <p className="insp-copy">
-                This key is empty. Pick a channel in Channels to give it one, or choose a type.
+                This key is empty. Pick a channel {where} to give it one, or choose a type.
               </p>
             </div>
           </div>
@@ -936,6 +967,7 @@ export const Inspector = () => {
           <PlaysChannel
             index={index}
             channel={key.channel}
+            where={where}
             onGroup={() => {
               focusType.current = true;
               edit((s) => setKeyType(s, index, 'group'));
@@ -943,8 +975,11 @@ export const Inspector = () => {
           />
         )}
 
-        {key.type === 'group' && <PlaysGroup key={`plays-${index}`} index={index} keyValue={key} />}
+        {key.type === 'group' && (
+          <PlaysGroup key={`plays-${index}`} index={index} keyValue={key} where={where} />
+        )}
       </div>
+      {picker}
     </Card>
   );
 };

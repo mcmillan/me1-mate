@@ -9,6 +9,7 @@ import { atom, type Getter } from 'jotai';
 import { blank, clean, type Editable, fromSystem } from './edit.ts';
 import { example } from './example.ts';
 import { configNameOf, type FileKind, kindOf, kindsOf, type LoadedFiles, load } from './files.ts';
+import type { PhoneScreen } from './layout.ts';
 
 // ---- the system ------------------------------------------------------------
 
@@ -94,6 +95,11 @@ export const selectedKeyAtom = atom(0);
  * pointed out, and a channel's key can be pointed out on the key grid.
  */
 export const highlightKeyAtom = atom<number | null>(null);
+
+/** In the phone layout (`lib/layout.ts`): which screen the Keys | Channels switch shows. */
+export const phoneScreenAtom = atom<PhoneScreen>('keys');
+/** In the phone layout: whether the selected key is open in its sheet. */
+export const keySheetOpenAtom = atom(false);
 
 // ---- history ---------------------------------------------------------------
 
@@ -204,6 +210,8 @@ export const replaceSystemAtom = atom(
     set(configNameAtom, next.configName ?? 'NEWMIX');
     set(loadIssuesAtom, []);
     set(selectedKeyAtom, 0);
+    set(phoneScreenAtom, 'keys');
+    set(keySheetOpenAtom, false);
     set(startedAtom, true);
   },
 );
@@ -231,6 +239,7 @@ export const startExampleAtom = atom(null, (_get, set) => {
 
 /** Back to the list of sessions; the open one keeps being saved. */
 export const goHomeAtom = atom(null, (_get, set) => {
+  set(keySheetOpenAtom, false);
   set(screenAtom, 'home');
 });
 

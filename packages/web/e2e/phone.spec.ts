@@ -1,0 +1,256 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseConfig } from '@mcmillan/me1-mate-core';
+import type { Page } from '@playwright/test';
+import { expect, FIXTURES, fits, JOSEPH, scratch, test } from './helpers.ts';
+
+/**
+ * The phone layout: the key grid is the home screen, a key opens in a sheet
+ * with its channel picker, and channels are named on a screen of their own.
+ */
+
+/** How far the page runs on past the end of its content. */
+const spaceBelow = (page: Page) =>
+  page.evaluate(() => {
+    const main = document.querySelector('main');
+    if (!main) return Number.POSITIVE_INFINITY;
+    return document.documentElement.scrollHeight - (main.getBoundingClientRect().bottom + scrollY);
+  });
+
+test('a key opens in its sheet, where its channels are picked @touch', async ({ editor, page }) => {
+  await editor.startNew();
+  const { tiles, sheet, pick } = editor;
+  await tiles.nth(0).click();
+  await expect(sheet, 'tapping a key opens its sheet').toBeVisible();
+  await expect(sheet).toHaveAccessibleName('Key 1');
+
+  await pick(5).click();
+  await expect(pick(5), 'the picked channel is pressed').toHaveAttribute('aria-pressed', 'true');
+  await expect(tiles.nth(0), 'an empty key becomes a channel key').toHaveAttribute(
+    'aria-label',
+    /channel 5\b/,
+  );
+  await pick(7).click();
+  await expect(pick(5)).toHaveAttribute('aria-pressed', 'false');
+  await editor.typeButton(1, 'Group').click();
+  await pick(5).click();
+  await pick(9).click();
+  await expect(tiles.nth(0), 'a group collects picks').toHaveAttribute('aria-label', /3 channels/);
+  await expect(pick(9), 'the tile says which key plays it').toHaveAccessibleName(
+    /played by key 01/,
+  );
+
+  await sheet.getByRole('button', { name: 'Next key' }).click();
+  await expect(sheet, '› steps to the next key').toHaveAccessibleName('Key 2');
+  await expect(editor.typeButton(2, 'Empty')).toHaveAttribute('aria-pressed', 'true');
+  await sheet.getByRole('button', { name: 'Previous key' }).click();
+  await expect(sheet, '‹ steps back').toHaveAccessibleName('Key 1');
+  await sheet.getByRole('button', { name: 'Next key' }).click();
+
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet, 'Done closes it').toBeHidden();
+  await expect(tiles.nth(1), 'and the key it ended on has focus').toBeFocused();
+  await expect(tiles.nth(1)).toHaveAttribute('aria-checked', 'true');
+
+  await tiles.nth(2).click();
+  await expect(sheet).toHaveAccessibleName('Key 3');
+  await page.keyboard.press('Escape');
+  await expect(sheet, 'Escape closes it').toBeHidden();
+  await expect(tiles.nth(2)).toBeFocused();
+});
+
+test('channels are named and linked on their own screen @touch', async ({ editor, page }) => {
+  await editor.startNew();
+  await editor.tiles.nth(0).click();
+  await editor.pick(5).click();
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+
+  await editor.screenTab('Channels').click();
+  await expect(editor.screenTab('Channels')).toHaveAttribute('aria-selected', 'true');
+  await expect(editor.keyGrid, 'the keys give way to the channels').toBeHidden();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Channels' }),
+    'the screen is the tab’s panel',
+  ).toBeVisible();
+  await expect(editor.pick(1), 'nothing is picked here').toHaveCount(0);
+
+  await editor.channelName(5).fill('Kick');
+  await editor.button('Link channels 7 and 8 as a stereo pair').click();
+  await expect(editor.channelName(8), 'a linked pair has one name').toHaveCount(0);
+
+  await page.getByRole('button', { name: /^Used by key 01, Kick: open it/ }).click();
+  await expect(editor.sheet, "a key's marker opens the key").toHaveAccessibleName('Key 1');
+  await expect(editor.pick(5)).toHaveAccessibleName(/Kick/);
+  await expect(editor.button(/^Channels 7–8/), 'the pair picks as one').toBeVisible();
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+
+  await editor.screenTab('Keys').click();
+  await editor.screenTab('Keys').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(editor.screenTab('Channels'), 'arrow keys move along the tabs').toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(editor.channelName(5)).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(editor.screenTab('Keys')).toBeFocused();
+  await expect(editor.keyGrid).toBeVisible();
+  await expect(editor.tiles.nth(0)).toHaveAttribute('aria-label', /Kick/);
+});
+
+test('the menu holds undo, redo, open, new, the tour and home @touch', async ({ editor, page }) => {
+  await editor.startNew();
+  await expect(editor.button(/^Undo/), 'the bar itself is calm').toBeHidden();
+  await editor.tiles.nth(0).click();
+  await editor.pick(6).click();
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(editor.unsaved).toBeAttached();
+
+  await editor.command('Undo (⌘Z)');
+  await expect(editor.tiles.nth(0)).toHaveAttribute('aria-label', /unassigned/);
+  await editor.command('Redo (⇧⌘Z)');
+  await expect(editor.tiles.nth(0)).toHaveAttribute('aria-label', /channel 6\b/);
+
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    editor.command('Open files'),
+  ]);
+  await chooser.setFiles(JOSEPH);
+  await expect(editor.configName).toHaveValue('JOSEPH');
+
+  await editor.command('Start new');
+  await expect(editor.configName).toHaveValue('NEWMIX');
+  await expect(editor.tiles.nth(0)).toHaveAttribute('aria-label', /unassigned/);
+
+  await editor.command('Show me around');
+  const step = page.getByRole('dialog').filter({ visible: true });
+  await expect(step).toContainText('16 keys');
+  await step.getByRole('button', { name: /Skip/ }).click();
+
+  await editor.goHome();
+  await expect(editor.sessions.getByRole('button', { name: /^Open JOSEPH/ })).not.toHaveCount(0);
+});
+
+test('the tour points at what a phone shows @touch', async ({ editor, page }) => {
+  await editor.startNew();
+  await editor.screenTab('Channels').click();
+  await editor.command('Show me around');
+  const step = page.getByRole('dialog').filter({ visible: true });
+  /** The element the step is tethered to (named --tour), which must be on screen. */
+  const target = () =>
+    page.evaluate(() => {
+      const el = [...document.querySelectorAll<HTMLElement>('body *')].find(
+        (e) => getComputedStyle(e).getPropertyValue('anchor-name') === '--tour',
+      );
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        cls: el.className,
+        onScreen: r.width > 0 && r.bottom > 0 && r.top < innerHeight,
+      };
+    });
+
+  await expect(step).toContainText('16 keys');
+  await expect(editor.keyGrid, 'the tour starts on the key screen').toBeVisible();
+  expect(await target()).toMatchObject({ cls: expect.stringContaining('workspace-keys') });
+  await step.getByRole('button', { name: 'Next' }).click();
+  await expect(step).toContainText('switch to Channels');
+  expect(await target()).toMatchObject({ cls: 'top-switch', onScreen: true });
+  await step.getByRole('button', { name: 'Next' }).click();
+  await expect(step).toContainText('The key you open');
+  expect(await target()).toMatchObject({ onScreen: true });
+  await step.getByRole('button', { name: 'Next' }).click();
+  await expect(step).toContainText(/export/i);
+  expect(await target()).toMatchObject({
+    cls: expect.stringContaining('top-export'),
+    onScreen: true,
+  });
+  await step.getByRole('button', { name: 'Done' }).click();
+  await expect(step).toHaveCount(0);
+});
+
+test('a problem in the list opens the key at the field @touch', async ({ editor, page }) => {
+  await editor.openJoseph();
+  await editor.tiles.nth(1).click();
+  await editor.label.fill('Pc!');
+  await editor.label.press('Tab');
+  await expect(
+    page
+      .getByText(/Key 2's label/)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(editor.tiles.nth(1), 'the key shows it has a problem').toHaveAttribute(
+    'aria-label',
+    /1 problem/,
+  );
+
+  await editor.tiles.nth(5).click();
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+  await editor.button(/^1 problem/).click();
+  await editor.menuItem(/Key 2's label/).click();
+  await expect(editor.sheet, "the key's sheet opens").toHaveAccessibleName('Key 2');
+  await expect(editor.label, 'at the field').toBeFocused();
+  await editor.label.fill('Perc');
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(editor.button(/problem/), 'fixed, the count goes').toHaveCount(0);
+});
+
+test('the key screen fits the window and no screen runs on past its end @touch', async ({
+  editor,
+  page,
+}) => {
+  await editor.startNew();
+  expect(await fits(page), 'the blank key screen fits').toBe(true);
+  await editor.openJoseph();
+  expect(await fits(page), 'the loaded key screen fits').toBe(true);
+  await editor.screenTab('Channels').click();
+  expect(await spaceBelow(page), 'nothing below the channels').toBeLessThanOrEqual(1);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const last = await page.getByRole('group', { name: 'Channels 39 and 40' }).boundingBox();
+  const height = page.viewportSize()?.height ?? 0;
+  expect((last?.y ?? 0) + (last?.height ?? 0), 'the last pair ends at the foot').toBeGreaterThan(
+    height - 80,
+  );
+
+  await editor.screenTab('Keys').click();
+  await editor.tiles.nth(0).click();
+  const sheet = await editor.sheet.evaluate(async (el) => {
+    // Once it has risen into place.
+    await Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})));
+    const r = el.getBoundingClientRect();
+    el.scrollTop = el.scrollHeight;
+    const tiles = [...el.querySelectorAll('.ch-pick')];
+    const end = tiles.at(-1)?.getBoundingClientRect().bottom ?? 0;
+    return { top: r.top, bottom: r.bottom, below: r.bottom - end, vh: innerHeight };
+  });
+  expect(sheet.bottom, 'the sheet reaches the bottom of the window').toBeCloseTo(sheet.vh, 0);
+  expect(sheet.top, 'and nearly the top').toBeLessThan(60);
+  expect(sheet.below, 'it ends with its last channel').toBeLessThan(60);
+});
+
+test('exports from a phone are byte-exact apart from the edits @touch', async ({ editor }) => {
+  const dir = scratch();
+  await editor.openJoseph();
+  await editor.tiles.nth(0).click();
+  await editor.label.fill('Drums');
+  await editor.sheet.getByRole('button', { name: 'Done' }).click();
+  await editor.screenTab('Channels').click();
+  await editor.channelName(18).fill('BassDI');
+  const me1 = await editor.save(/Config for the ME-1/, dir);
+  const meu = await editor.save(/Channel setup for the ME-U/, dir);
+  expect([me1.name, meu.name]).toEqual(['JOSEPH.ME1', 'ChannelSetup.meu']);
+
+  const back = parseConfig({ me1: readFileSync(me1.path), meu: readFileSync(meu.path, 'utf8') });
+  if (!back.isOk) throw new Error(`exports don't parse back: ${JSON.stringify(back.error)}`);
+  expect((back.value.keys[0] as { name?: string }).name).toBe('Drums');
+  expect(back.value.channels[17]?.name).toBe('BassDI');
+  const orig = readFileSync(join(FIXTURES, 'JOSEPH.ME1'));
+  const out = readFileSync(me1.path);
+  const changed = [...out.keys()].filter((i) => out[i] !== orig[i]);
+  expect(
+    changed.filter((i) => i < 0xcc || i > 0xd3),
+    'only key 1 name bytes changed',
+  ).toEqual([]);
+});
