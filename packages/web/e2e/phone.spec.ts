@@ -46,9 +46,7 @@ test('a key opens in its sheet, where its channels are picked @touch', async ({ 
   await pick(5).click();
   await pick(9).click();
   await expect(tiles.nth(0), 'a group collects picks').toHaveAttribute('aria-label', /3 channels/);
-  await expect(pick(9), 'the tile says which key plays it').toHaveAccessibleName(
-    /played by key 01/,
-  );
+  await expect(pick(9), 'the tile says which key plays it').toHaveAccessibleName(/used by key 01/);
 
   await sheet.getByRole('button', { name: 'Next key' }).click();
   await expect(sheet, '› steps to the next key').toHaveAccessibleName('Key 2');
@@ -141,70 +139,236 @@ test('the menu holds undo, redo, open, new, the tour and home @touch', async ({ 
   await expect(editor.sessions.getByRole('button', { name: /^Open JOSEPH/ })).not.toHaveCount(0);
 });
 
-test('the phone has its own tour, switching screens as it goes @touch', async ({
+/** Where the tour's step is: the part it's about (named --tour), the card, and the sheet's top. */
+const placement = (page: Page) =>
+  page.evaluate(async () => {
+    // Once the sheet has risen and scrolled into place.
+    await new Promise((done) => setTimeout(done, 900));
+    const el = [...document.querySelectorAll<HTMLElement>('body *')].find(
+      (e) => getComputedStyle(e).getPropertyValue('anchor-name') === '--tour',
+    );
+    const card = document.querySelector<HTMLElement>('dialog.tour-step');
+    if (!el || !card) return null;
+    const sheet = el.closest('dialog.sheet');
+    const r = el.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    return {
+      cls: String(el.className),
+      inSheet: sheet !== null,
+      cardInSheet: sheet?.contains(card) ?? false,
+      top: r.top,
+      bottom: r.bottom,
+      cardTop: c.top,
+      heroBottom: sheet?.querySelector('.insp-hero')?.getBoundingClientRect().bottom ?? 0,
+      onScreen: r.width > 0 && r.bottom > 0 && r.top < innerHeight,
+    };
+  });
+
+test('the phone has its own tour, opening a key’s page and switching screens @touch', async ({
   editor,
   page,
 }) => {
-  await editor.startNew();
+  await editor.openJoseph();
+  const { tiles, sheet } = editor;
+  // Key 6 is the one selected before the tour; the tour opens key 1's page, then puts key 6 back.
+  await tiles.nth(5).click();
+  await sheet.getByRole('button', { name: 'Done' }).click();
   await editor.screenTab('Channels').click();
   await editor.command('Show me around');
-  const step = page.getByRole('dialog').filter({ visible: true });
-  /** The element the step is tethered to (named --tour), which must be on screen. */
-  const target = () =>
-    page.evaluate(() => {
-      const el = [...document.querySelectorAll<HTMLElement>('body *')].find(
-        (e) => getComputedStyle(e).getPropertyValue('anchor-name') === '--tour',
-      );
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return {
-        cls: el.className,
-        onScreen: r.width > 0 && r.bottom > 0 && r.top < innerHeight,
-      };
-    });
-
+  const step = page.locator('dialog.tour-step').filter({ visible: true });
   const showing = (tab: 'Keys' | 'Channels') =>
     expect(editor.screenTab(tab), `the ${tab} screen is showing`).toHaveAttribute(
       'aria-selected',
       'true',
     );
-  const next = () => step.getByRole('button', { name: 'Next' }).click();
+  const button = (name: string | RegExp) => step.getByRole('button', { name });
+  const next = () => button('Next').click();
+  /** The part the step is about is in the sheet, clear of its top and showing above the card. */
+  const inSheet = async (cls: string, whole = true) => {
+    const at = await placement(page);
+    expect(at, `${cls} is the step's part`).toMatchObject({
+      cls: expect.stringContaining(cls),
+      inSheet: true,
+      cardInSheet: true,
+    });
+    if (!at) return;
+    if (cls !== 'insp-hero')
+      expect(at.top, 'below the sheet’s top').toBeGreaterThanOrEqual(at.heroBottom - 1);
+    expect(at.top, 'and above the card').toBeLessThan(at.cardTop - 40);
+    if (whole) expect(at.bottom, 'all of it').toBeLessThanOrEqual(at.cardTop + 1);
+  };
 
   await expect(step).toContainText('16 keys');
-  await expect(step).toContainText('1 of 4');
+  await expect(step).toContainText('1 of 7');
   await showing('Keys');
-  expect(await target()).toMatchObject({ cls: expect.stringContaining('workspace-keys') });
+  await expect(sheet).toBeHidden();
+
   await next();
-  await expect(step).toContainText('A key’s page');
-  await showing('Keys');
+  await expect(sheet, 'the second step opens a real key’s page').toBeVisible();
+  await expect(sheet).toHaveAccessibleName('Key 1');
+  await expect(step).toContainText('Key 1’s page');
+  await expect(step).toContainText('2 of 7');
+  await expect(button('Next'), 'the way forward has focus').toBeFocused();
+  await inSheet('insp-hero');
+
+  // The keyboard: Tab stays on the card's buttons, Enter goes on.
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        // Past the card's last button, a modal lets Tab out to the browser's own UI (the body).
+        return el?.closest('.tour-step') || el === document.body ? 'card' : `${el?.tagName}`;
+      }),
+      'Tab stays in the card',
+    ).toBe('card');
+  }
+  await button('Next').focus();
+  await page.keyboard.press('Enter');
+  await expect(step).toContainText('Key type');
+  await expect(step).not.toContainText(/plays/i);
+  await inSheet('insp-type');
+  await expect(sheet.locator('.insp-fields'), 'the rest of the sheet recedes').toHaveCSS(
+    'opacity',
+    '0.32',
+  );
+
   await next();
-  await expect(step, 'the Channels step shows the Channels screen').toContainText('40 channels');
+  await expect(step).toContainText('Label, level and mute');
+  await inSheet('insp-fields');
+  await next();
+  await expect(step).toContainText('Its channels');
+  await expect(step).toContainText('5 of 7');
+  await inSheet('ch-picker', false);
+
+  await button('Back').click();
+  await expect(step).toContainText('Label, level and mute');
+  await expect(sheet, 'Back within the sheet keeps it open').toBeVisible();
+  await next();
+  await next();
+  await expect(step, 'past the sheet, the Channels screen').toContainText('40 channels');
+  await expect(sheet, 'and the sheet has closed').toBeHidden();
   await showing('Channels');
-  expect(await target()).toMatchObject({
+  expect(await placement(page)).toMatchObject({
     cls: expect.stringContaining('workspace-channels'),
     onScreen: true,
   });
-  await step.getByRole('button', { name: 'Back' }).click();
-  await showing('Keys');
+  await button('Back').click();
+  await expect(sheet, 'Back into the sheet opens it again').toBeVisible();
+  await expect(step).toContainText('Its channels');
   await next();
-  await showing('Channels');
   await next();
-  await expect(step, 'and the step after it goes back to Keys').toContainText(/export/i);
+  await expect(step).toContainText(/export/i);
   await showing('Keys');
-  expect(await target()).toMatchObject({
+  expect(await placement(page)).toMatchObject({
     cls: expect.stringContaining('top-export'),
     onScreen: true,
   });
-  await step.getByRole('button', { name: 'Done' }).click();
+  await button('Done').click();
   await expect(step).toHaveCount(0);
+  await expect(tiles.nth(5), 'the key selected before is selected again').toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 
-  // Ending the tour on the Channels step puts the key screen back.
+  // Skip mid-sheet closes it and goes back to Keys.
+  await editor.screenTab('Channels').click();
   await editor.command('Show me around');
   await next();
   await next();
-  await showing('Channels');
-  await step.getByRole('button', { name: /Skip/ }).click();
+  await expect(sheet).toBeVisible();
+  await button(/Skip/).click();
+  await expect(step).toHaveCount(0);
+  await expect(sheet).toBeHidden();
   await showing('Keys');
+  await expect(tiles.nth(5)).toHaveAttribute('aria-checked', 'true');
+
+  // Escape mid-sheet ends the tour and closes the sheet in one go.
+  await editor.command('Show me around');
+  await next();
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(step).toHaveCount(0);
+  await expect(sheet).toBeHidden();
+  await expect(tiles.nth(5)).toHaveAttribute('aria-checked', 'true');
+  await expect(tiles.nth(5), 'focus is back on the key screen').toBeFocused();
+
+  // A tap above the sheet closes it, and that ends the tour too.
+  await editor.command('Show me around');
+  await next();
+  await expect(sheet).toBeVisible();
+  await page.mouse.click(200, 3);
+  await expect(sheet).toBeHidden();
+  await expect(step).toHaveCount(0);
+
+  // The tour made no edits.
+  await expect(editor.unsaved).toBeHidden();
+  await editor.more.click();
+  await expect(
+    page
+      .getByRole('menuitem', { name: 'Undo (⌘Z)' })
+      .or(page.locator('[focusgroup~="menu"]').getByRole('button', { name: 'Undo (⌘Z)' }))
+      .filter({ visible: true }),
+    'and left nothing to undo',
+  ).toHaveAttribute('aria-disabled', 'true');
+});
+
+test('the phone tour of a blank system shows an empty key’s page @touch', async ({
+  editor,
+  page,
+}) => {
+  await editor.startNew();
+  await editor.command('Show me around');
+  const step = page.locator('dialog.tour-step').filter({ visible: true });
+  await expect(step).toContainText('1 of 6');
+  await step.getByRole('button', { name: 'Next' }).click();
+  await expect(editor.sheet).toHaveAccessibleName('Key 1');
+  await step.getByRole('button', { name: 'Next' }).click();
+  await expect(step, 'an empty key has no label or level yet').toContainText('Once it has a type');
+  await step.getByRole('button', { name: 'Next' }).click();
+  await expect(step).toContainText('Its channels');
+  await expect(step).toContainText('4 of 6');
+  await step.getByRole('button', { name: /Skip/ }).click();
+  await expect(editor.sheet).toBeHidden();
+  await expect(editor.unsaved).toBeHidden();
+});
+
+test('a key that takes no channels has no picker in its sheet @touch', async ({ editor }) => {
+  await editor.startNew();
+  const { sheet } = editor;
+  const picker = sheet.getByRole('region', { name: 'Channels' });
+  await editor.tiles.nth(0).click();
+  await expect(picker, 'an empty key picks its channel').toBeVisible();
+  for (const type of ['Auto', 'Aux In', 'Tone']) {
+    await editor.typeButton(1, type).click();
+    await expect(picker, `${type} has no picker`).toHaveCount(0);
+  }
+  await editor.typeButton(1, 'Channel').click();
+  await expect(picker, 'back to Channel, it is back').toBeVisible();
+  await editor.typeButton(1, 'Group').click();
+  await expect(picker).toBeVisible();
+});
+
+test('closing the sheet with a tap leaves no focus ring; the keyboard keeps it @touch', async ({
+  editor,
+  page,
+}) => {
+  await editor.startNew();
+  const { tiles, sheet } = editor;
+  const ring = (i: number) => tiles.nth(i).evaluate((el) => getComputedStyle(el).outlineStyle);
+  await tiles.nth(2).click();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(tiles.nth(2)).toBeFocused();
+  expect(await ring(2), 'no ring after a tap').toBe('none');
+
+  await tiles.nth(2).focus();
+  await page.keyboard.press('Enter');
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(tiles.nth(2)).toBeFocused();
+  expect(await ring(2), 'a ring after a key').toBe('solid');
 });
 
 test('the menu opens the keyboard shortcuts @touch', async ({ editor, page }) => {
@@ -319,7 +483,8 @@ test('the key sheet offers Aux In, Tone, a balance, member pans and mute @touch'
 
   await tiles.nth(13).click();
   await editor.typeButton(14, 'Aux In').click();
-  await expect(sheet.getByText(/plays the Aux Input, so it takes no channels/)).toBeVisible();
+  await expect(sheet.getByText(/Aux Input.*It takes no channels/)).toBeVisible();
+  await expect(sheet.getByRole('region', { name: 'Channels' }), 'and no picker').toHaveCount(0);
   await editor.mute(14).click();
   await expect(editor.mute(14)).toHaveAttribute('aria-pressed', 'true');
   const balance = editor.slider('Key 14 balance');

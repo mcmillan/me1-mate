@@ -62,11 +62,17 @@ the same parts arranged for its screen; see below):
   field) for a sheet listing them all: undo and redo, moving through keys and
   channels, typing channel names straight through, and the level and pan
   keys. On a phone it's also in the ⋯ menu.
-- **Tour**: a four-step walk through keys, channels, the inspector and export
-  (on a phone, its own four steps: the key screen, a key's page, the Channels
-  screen, which it switches to for that step, then Export and the ⋯ menu).
-  It runs the first time you reach the editor and any time from the `?`
-  (on a phone, from the ⋯ menu).
+- **Tour**: a four-step walk through keys, channels, the inspector and export.
+  On a phone it has its own steps (seven at most): the key screen; then a
+  key's page, opened for real (the first channel or group key, or on a blank
+  system key 1), one part per step: its top with ‹ › and Done, the type
+  switch, label, level and mute, and the channel picker (a part the key's
+  page doesn't have is left out); then the Channels screen, which it switches
+  to for that step, then Export and the ⋯ menu. Each part is lit and scrolled
+  into view above the step's card while the rest dims. Leaving those steps
+  closes the page and selects the key you had before; the tour changes
+  nothing. It runs the first time you reach the editor and any time from the
+  `?` (on a phone, from the ⋯ menu).
 - **Opening files**: press Open, or drop an `.ME1`, a `.meu`, or both
   anywhere, on either screen. Opening files, like New, starts a new session
   and never overwrites the one that was open, so nothing asks you to confirm.
@@ -95,8 +101,10 @@ long scroll away:
   group's channels with their levels and pans; and then the channel picker, a tile per channel
   (two to a pair), in the colour of the key that plays it and with that key's
   number, ringed where the open key plays it. Picking works as in Channels.
-  Done, Escape, the back gesture or a tap on the strip above close it, and
-  the key you ended on has focus.
+  A key that takes no channels (Auto, Aux In, Tone) has no picker, so its
+  sheet ends with its level. Done, Escape, the back gesture or a tap on the
+  strip above close it, and the key you ended on has focus (with no focus
+  ring when you closed it with a tap).
 - **The Channels screen**, chosen with the Keys | Channels switch under the
   top bar, is the channel grid for naming channels and linking pairs, with
   no key selected; a key's number on a channel opens that key.
@@ -204,7 +212,7 @@ src
 │   ├── Inspector.tsx    editor for the selected key (also the key sheet's body)
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key (all, or the phone's pick or names part)
 │   ├── Fader.tsx        level fader (a native range input on the fader law) and the pan control
-│   ├── Tour.tsx         the guided walk through the editor, one for the one page and one for phones
+│   ├── Tour.tsx         the guided walk through the editor, one for the one page and one for phones (through a key's sheet)
 │   ├── Shortcuts.tsx    the keyboard shortcuts sheet (`?`)
 │   ├── OpenFiles.tsx, WindowDrop.tsx              opening and dropping files
 │   ├── LoadNotice.tsx, Notice.tsx                 files that couldn't be opened
@@ -215,6 +223,7 @@ src
 └── lib
     ├── store.ts         Jotai atoms: the screen, the system, history, selection, the phone's screen and sheet, opening files
     ├── layout.ts        the phone layout: its width, and where a problem's field is in it
+    ├── focus.ts         returnFocus: focus put back after a close, with no ring after a tap
     ├── edit.ts          pure edits on a system, including pickChannel
     ├── example.ts       the built-in example band
     ├── files.ts         reading files, downloading exports

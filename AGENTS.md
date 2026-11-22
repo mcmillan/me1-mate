@@ -98,8 +98,12 @@ make sure every export is described and nothing described is gone.
   screenshots and `scrollHeight` against `innerHeight`, never full-page
   screenshots, which stretch anything sized in `dvh`. The tour (`Tour.tsx`) points at the
   regions by their roles and wrapper classes. The phone has its own steps
-  (`PHONE_STEPS`), each naming the screen it needs, since the phone has
-  screens rather than regions; keep both tours true when they change. The
+  (`phoneSteps`), each naming the screen it needs, since the phone has
+  screens rather than regions; its `sheet` steps open a real key's sheet and
+  walk its parts, with the step's card portalled into the sheet's `<dialog>`
+  (the modal makes everything outside it inert) and the sheet's own content
+  made inert instead of `main`. The tour never edits: it only selects the key
+  and puts the old selection back. Keep both tours true when they change. The
   keyboard shortcuts sheet (`Shortcuts.tsx`, opened by `?`) lists every
   shortcut: update it whenever a key handler changes.
 - Look: the typeface is Allo (`public/fonts`, set in `styles.css`; tabular,
@@ -111,7 +115,9 @@ make sure every export is described and nothing described is gone.
   has its own colour (`keyColor` / `keyStyle` in `lib/theme.ts`, read as
   `var(--k)`, text on it `--on-key`). Colour means which key, never key type
   (say type in words); selected is an ink ring; focus is the blue `--focus`
-  ring; red means a problem. Show little at rest and reveal detail on hover
+  ring (focus put back after a close goes through `returnFocus` in
+  `lib/focus.ts`: no ring after a tap, always one after a key); red means a
+  problem. Show little at rest and reveal detail on hover
   and focus (always visible under `hover: none`). Component-specific CSS
   lives in a `<style>` block beside the component, with class names prefixed
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,

@@ -341,7 +341,7 @@ export const Home = () => {
               The ME-1 has 16 keys. Choose the one you want to set up.
             </Step>
             <Step n={2} title="Pick its channels" art={<ChannelsArt />}>
-              Press channel numbers to give them to the key. A key can play one channel or a group.
+              Press channel numbers to give them to the key. A key can take one channel or a group.
             </Step>
             <Step n={3} title="Set levels and export" art={<LevelsArt />}>
               Give the key a label, set its levels, then export the .ME1 and the .meu.

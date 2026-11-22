@@ -18,6 +18,7 @@ import {
   useState,
 } from 'react';
 import { type TamaguiElement, YStack, type YStackProps } from 'tamagui';
+import { returnFocus } from '../lib/focus.ts';
 
 const NATIVE_FOCUSGROUP = 'focusGroup' in HTMLElement.prototype;
 const NATIVE_INVOKERS = 'commandForElement' in HTMLButtonElement.prototype;
@@ -138,8 +139,7 @@ export const Menu = ({ trigger, panel, children }: MenuProps) => {
   const close = (fromPointer: boolean) => {
     const button = triggerEl();
     if (button) {
-      if (fromPointer) quietFocus(button);
-      else button.focus();
+      returnFocus(button, fromPointer);
     }
     if (menuRef.current?.matches(':popover-open')) menuRef.current.hidePopover();
   };
@@ -192,7 +192,7 @@ export const Menu = ({ trigger, panel, children }: MenuProps) => {
       }
       if (!NATIVE_ANCHORS) placeByScript(menu, button);
       if (enterOnOpen) enter();
-      else quietFocus(button);
+      else returnFocus(button, true);
       enterOnOpen = false;
     };
 

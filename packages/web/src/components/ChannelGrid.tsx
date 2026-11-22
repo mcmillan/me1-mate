@@ -707,7 +707,7 @@ const Instruction = ({ system, index }: { system: Editable; index: number }) => 
       const first = pickTarget(system, key.channel);
       return (
         <>
-          <KeyPill index={index} label={keyLabel(system, key)} /> plays ch {first}
+          <KeyPill index={index} label={keyLabel(system, key)} /> is on ch {first}
           {isStereo(system, first) ? `+${first + 1}` : ''}: pick another to change it
         </>
       );
@@ -721,28 +721,29 @@ const Instruction = ({ system, index }: { system: Editable; index: number }) => 
     case 'auto':
       return (
         <>
-          <KeyPill index={index} label="Auto" /> takes the next free channel, so picking is off
+          <KeyPill index={index} label="Auto" /> finds the next free channel itself, so it takes no
+          channels from here
         </>
       );
     case 'aux':
       return (
         <>
-          <KeyPill index={index} label={keyLabel(system, key)} /> plays the Aux Input, so it takes
-          no channels
+          <KeyPill index={index} label={keyLabel(system, key)} /> is the Aux Input, so it takes no
+          channels
         </>
       );
     case 'tone':
       return (
         <>
-          <KeyPill index={index} label={keyLabel(system, key)} /> plays a 1 kHz tone, so it takes no
-          channels
+          <KeyPill index={index} label={keyLabel(system, key)} /> is a 1 kHz test tone, so it takes
+          no channels
         </>
       );
     default:
       return (
         <>
           <KeyPill index={index} label={key ? keyLabel(system, key) : 'Unknown'} /> is kept as it
-          was loaded, so picking is off
+          was loaded, so it takes no channels until you choose a type
         </>
       );
   }
@@ -903,7 +904,7 @@ const Pick = ({
   const said = [
     numbers,
     name,
-    tile && players.length > 0 ? `played by key ${players.join(' and ')}` : '',
+    tile && players.length > 0 ? `used by key ${players.join(' and ')}` : '',
   ]
     .filter(Boolean)
     .join(tile ? ', ' : ' ');

@@ -3,18 +3,23 @@
  * with everything about it in one place. It is the inspector (`Inspector`),
  * with the channel picker for the key (`ChannelGrid variant="pick"`) inside
  * it, on a native modal `<dialog>` drawn as a sheet that rises from the
- * bottom of the window and nearly fills it. Only the sheet scrolls.
+ * bottom of the window and nearly fills it. Only the sheet scrolls. A key
+ * that takes no channels (Auto, Aux In, Tone, or one this editor only keeps)
+ * has no picker: its sheet ends with its level.
  *
  * `keySheetOpenAtom` opens and closes it. The browser gives the inert page,
  * focus containment, and Escape and the back gesture; `closedby="any"` also
  * closes it from the strip of page left above it, with a fallback where
  * `closedby` is missing. Closing goes back to the grid with the key that was
- * open focused (the ‹ › steps may have moved on from the tile that opened it).
+ * open focused (the ‹ › steps may have moved on from the tile that opened it),
+ * without a focus ring when it was closed with a tap (`returnFocus`).
  */
 
 import { useAtom, useAtomValue } from 'jotai';
 import { useEffect, useRef } from 'react';
-import { keySheetOpenAtom, selectedKeyAtom } from '../lib/store.ts';
+import { canPick } from '../lib/edit.ts';
+import { returnFocus } from '../lib/focus.ts';
+import { keySheetOpenAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
 import { ChannelGrid } from './ChannelGrid.tsx';
 import { useLightDismiss } from './ConfirmDialog.tsx';
 import { Inspector } from './Inspector.tsx';
@@ -128,6 +133,7 @@ const selectedTile = () =>
 export const KeySheet = () => {
   const [open, setOpen] = useAtom(keySheetOpenAtom);
   const index = useAtomValue(selectedKeyAtom);
+  const pickable = canPick(useAtomValue(systemAtom).keys[index]);
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -151,7 +157,7 @@ export const KeySheet = () => {
       setOpen(false);
       // After the browser has put focus back on the tile that opened the sheet.
       const tile = selectedTile();
-      if (tile && tile !== document.activeElement) tile.focus({ focusVisible: false });
+      if (tile) returnFocus(tile);
     };
     dialog.addEventListener('close', onClose);
     return () => dialog.removeEventListener('close', onClose);
@@ -171,7 +177,7 @@ export const KeySheet = () => {
     >
       <style>{CSS_TEXT}</style>
       <Inspector
-        picker={<ChannelGrid variant="pick" />}
+        picker={pickable ? <ChannelGrid variant="pick" /> : undefined}
         onClose={() => {
           if (ref.current) void closeSheet(ref.current);
         }}

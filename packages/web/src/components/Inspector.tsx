@@ -813,7 +813,7 @@ const PlaysChannel = ({
   const name = system.channels[channel - 1]?.name;
   return (
     <div className="insp-plays">
-      <Sub id={`${id}-h`}>Plays</Sub>
+      <Sub id={`${id}-h`}>Channel</Sub>
       {/* biome-ignore lint/a11y/useSemanticElements: a named group of two facts, not a form's fieldset */}
       <div
         className="insp-chan"
@@ -1086,7 +1086,7 @@ export const Inspector = ({
 
         {key.type === 'auto' && (
           <div className="insp-plays">
-            <Sub>Plays</Sub>
+            <Sub>Source</Sub>
             <p className="insp-copy">
               Auto takes the first channel that no other key or group uses.
             </p>
@@ -1095,7 +1095,7 @@ export const Inspector = ({
 
         {key.type === 'aux' && (
           <div className="insp-plays">
-            <Sub>Plays</Sub>
+            <Sub>Source</Sub>
             <p className="insp-copy">
               The ME-1’s Aux Input, the stereo socket on its back panel, for a click or a player. It
               takes no channels.
@@ -1105,7 +1105,7 @@ export const Inspector = ({
 
         {key.type === 'tone' && (
           <div className="insp-plays">
-            <Sub>Plays</Sub>
+            <Sub>Source</Sub>
             <p className="insp-copy">
               A 1 kHz test tone from the ME-1 itself, for checking the outputs. It takes no
               channels.

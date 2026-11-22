@@ -114,6 +114,13 @@ html {
 :root button:focus-visible {
   outline-color: var(--focus);
 }
+/*
+ * Focus put back after a tap (lib/focus.ts): no ring until a key is pressed.
+ * Repeated to outweigh the components' own ring rules.
+ */
+:root [data-quiet-focus][data-quiet-focus][data-quiet-focus]:focus-visible {
+  outline: none;
+}
 
 /* A raised surface: the inspector, and anything that floats. */
 .card {

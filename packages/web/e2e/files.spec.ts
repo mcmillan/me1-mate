@@ -146,7 +146,7 @@ test('a key switched to Aux In or Tone takes no channels and exports a file the 
   await editor.tiles.nth(13).click();
   await editor.typeButton(14, 'Aux In').click();
   await expect(editor.typeButton(14, 'Aux In')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText(/plays the Aux Input, so it takes no channels/)).toBeVisible();
+  await expect(page.getByText(/is the Aux Input, so it takes no channels/)).toBeVisible();
   await expect(editor.pick(5), 'picking is off').toHaveAttribute('aria-disabled', 'true');
   await expect(editor.slider('Key 14 balance'), 'the Aux Input has a balance').toBeVisible();
   await editor.tiles.nth(14).click();

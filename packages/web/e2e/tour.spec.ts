@@ -3,12 +3,20 @@ import { expect, TOUR_KEY, test } from './helpers.ts';
 test('the tour walks from the keys to export and changes nothing', async ({ editor, page }) => {
   await editor.startNew();
   await editor.command('Show me around');
-  const step = page.getByRole('dialog').filter({ visible: true });
+  const step = page.locator('dialog.tour-step').filter({ visible: true });
   await expect(step, 'it opens on the keys').toContainText('16 keys');
-  for (let i = 0; i < 3; i++) await step.getByRole('button', { name: 'Next' }).click();
+  // Four steps on the one page; on a phone, more (a key's page has a step for each part).
+  const done = step.getByRole('button', { name: 'Done', exact: true });
+  for (let i = 0; i < 10 && !(await done.isVisible()); i++) {
+    await step.getByRole('button', { name: 'Next', exact: true }).click();
+  }
   await expect(step, 'it ends at export').toContainText(/export/i);
   await step.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('dialog').filter({ visible: true }), 'Done closes it').toHaveCount(0);
+  await expect(
+    page.getByRole('dialog', { name: /^Key \d+$/ }),
+    'and no key’s page is open',
+  ).toBeHidden();
   await expect(editor.unsaved, 'the tour made no edit').toBeHidden();
 });
 
