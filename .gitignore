@@ -8,3 +8,4 @@ e2e-results/
 .DS_Store
 test-results/
 playwright-report/
+.claude/worktrees/
