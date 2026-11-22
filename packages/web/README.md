@@ -63,25 +63,73 @@ it).
 Editing a loaded file changes only what you edit: the export is written over
 the original, so everything the editor doesn't show is kept.
 
+## Offline and installable
+
+After one visit online the editor opens and works with no network (a laptop
+at a venue with no wifi), and browsers that support it offer to install it as
+an app (`public/manifest.webmanifest`).
+
+- **The service worker** (`src/sw.js`) is written into the build as `sw.js`
+  by the `serviceWorker` plugin in `vite.config.ts`, with the list of every
+  built file to precache (the page, scripts, styles, the font, the icons and
+  the manifest; not the link preview image or the crawler files) and a
+  version hashed from their contents. Only the build registers it
+  (`main.tsx`); the dev server has none.
+- **Updates:** the page itself is fetched network-first, so a visit online
+  always gets the latest deploy, and a new build's worker installs a fresh
+  cache, takes over at once and deletes the old one. It never reloads a page:
+  a page that's open keeps the code it loaded and picks up the new build the
+  next time it's opened. Offline (or after four seconds without an answer),
+  the cached page is used.
+- **Sessions** stay in `localStorage` and files are read in the page, so
+  nothing about them changes offline.
+
+`index.html` also carries what crawlers and link unfurlers read: a short
+description and the three steps inside `#root` (shown, plainly styled, until
+React replaces it), the canonical URL, Open Graph and Twitter card tags, and
+`SoftwareApplication` structured data. These use the absolute address
+`https://me1-mate.msd.audio/`, as do `public/robots.txt` and
+`public/sitemap.xml`; change them all if the site moves.
+
+### `public/`
+
+```
+public
+├── manifest.webmanifest   name, colours, icons; relative URLs, so it works under any base path
+├── icons/                 icon-192, icon-512 and icon-maskable-512 PNGs
+├── apple-touch-icon.png   180 px, for iOS home screens
+├── og-image.png           1200×630 link preview
+├── robots.txt, sitemap.xml
+└── fonts/                 Allo and its licence
+```
+
+The PNGs are drawn by `scripts/render-images.ts` (HTML in headless Chrome,
+with Allo and the key colours from `src/lib/theme.ts`) and committed, so the
+build needs no browser. Run `pnpm --filter @mcmillan/me1-mate-web images`
+after changing the mark or the colours. The inline SVG favicon in
+`index.html` is separate.
+
 ## Develop
 
 ```sh
 pnpm dev        # from the repo root, or `pnpm --filter @mcmillan/me1-mate-web dev`
 pnpm build      # production build into packages/web/dist
 pnpm --filter @mcmillan/me1-mate-web test   # unit tests for src/lib
-pnpm e2e        # end-to-end tests of the production build (from the repo root)
-pnpm e2e --project webkit       # one browser: chromium, firefox, webkit, iphone, pixel
+pnpm e2e        # end-to-end tests of the production build, Chromium only, 2 at a time (from the repo root)
+pnpm e2e:all    # every browser and phone, as CI runs it (heavy)
+pnpm e2e:all --project webkit   # one of: chromium, firefox, webkit, iphone, pixel
 BASE_PATH=/sub/ pnpm build      # to serve from a sub-path instead of a domain's root
+pnpm --filter @mcmillan/me1-mate-web images        # redraw the icons and link preview
 ```
 
 The end-to-end tests (`e2e/`, Playwright) build the editor and serve it with
 `vite preview` on port 4317, then run every check in Chromium, Firefox and
 WebKit on a desktop window and on an iPhone and a Pixel: the journeys (Home,
 picking channels, opening and byte-exact exporting, sessions, the tour, the
-keyboard), the layout at six window sizes in both colour schemes, an axe scan
-of every screen and dialog, ARIA snapshots of each region, and what a screen
-reader says (Guidepup's virtual screen reader everywhere, real VoiceOver on
-CI's macOS runner via `playwright.voiceover.config.ts`). Reports and traces go
+keyboard), working offline after one visit (Chromium, where the service
+worker can be driven), the installable manifest and the crawlable HTML, the
+layout at six window sizes in both colour schemes, an axe scan
+of every screen and dialog in both colour schemes. Reports and traces go
 to `e2e-results/`. Install the browsers once with
 `pnpm --filter @mcmillan/me1-mate-web exec playwright install chromium firefox webkit`.
 
@@ -92,7 +140,8 @@ shorthand props only), and [Jotai](https://jotai.org) for state.
 
 ```
 src
-├── main.tsx             Tamagui provider, follows the system colour scheme
+├── main.tsx             Tamagui provider, follows the system colour scheme; registers the service worker
+├── sw.js                the service worker (copied into the build by vite.config.ts)
 ├── App.tsx              Home or the editor: top bar, keys, inspector, channels, tour
 ├── styles.css           colours, type weights, the page layout, focus rings, touch sizes
 ├── components/
@@ -120,13 +169,15 @@ src
     ├── shortcuts.ts     undo/redo keys
     ├── announce.ts      messages for screen readers
     └── theme.ts         the typeface and the key colours
-public/fonts             Allo (variable WOFF2) and its licence
+public                   manifest, icons, link preview, robots.txt, sitemap, fonts (see above)
+scripts
+└── render-images.ts     draws the icons and the link preview into public/
 test
 └── edit.test.ts         the pure edits and the example
 e2e
 ├── helpers.ts           the page fixture (empty storage, tour seen, no page errors) and locators
 ├── home, picks, files, sessions, tour, layout .spec.ts   the journeys and the layout
-├── a11y.spec.ts         axe scans and ARIA snapshots (a11y.spec.ts-snapshots/)
-├── screen-reader.spec.ts   what Guidepup's virtual screen reader hears
-└── voiceover.spec.ts    real VoiceOver, macOS only (playwright.voiceover.config.ts)
+├── a11y.spec.ts         axe scans of every screen and dialog
+├── offline.spec.ts      works offline after one visit (Chromium)
+└── page.spec.ts         manifest, installability, crawlable HTML
 ```

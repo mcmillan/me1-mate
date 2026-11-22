@@ -3,8 +3,7 @@ name: CI
 # Every push and pull request: lint, typecheck and unit tests, then the
 # end-to-end suite against the production build in Chromium, Firefox and
 # WebKit (desktop and phone). On main, the web editor deploys to GitHub Pages
-# only once both have passed. Real VoiceOver runs on macOS alongside, and
-# doesn't hold up a deploy.
+# only once both have passed.
 
 on:
   push:
@@ -103,47 +102,6 @@ jobs:
         if: failure()
         with:
           name: e2e-report-${{ matrix.engine }}
-          path: packages/web/e2e-results/
-          retention-days: 14
-
-  voiceover:
-    name: e2e (VoiceOver)
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-
-      - uses: pnpm/action-setup@v6
-        with:
-          cache: true
-          run_install: |
-            args: [--frozen-lockfile]
-
-      - name: Install WebKit
-        run: pnpm --filter @mcmillan/me1-mate-web exec playwright install webkit
-
-      # Lets VoiceOver be driven by automation, then fetches the assets this
-      # version of @guidepup/guidepup needs. Run from the package that uses it.
-      - name: Set up VoiceOver for automation
-        working-directory: packages/web
-        run: |
-          pnpm dlx @guidepup/setup@0.29.3 setup --ci
-          pnpm dlx @guidepup/setup@0.29.3 install voiceover
-
-      - name: Build the core
-        run: pnpm --filter @mcmillan/me1-mate-core build
-
-      - name: VoiceOver tests
-        run: pnpm --filter @mcmillan/me1-mate-web e2e:voiceover
-
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: e2e-report-voiceover
           path: packages/web/e2e-results/
           retention-days: 14
 

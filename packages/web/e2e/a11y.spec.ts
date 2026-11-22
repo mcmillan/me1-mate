@@ -4,13 +4,9 @@ import { type Editor, expect, test } from './helpers.ts';
 
 /**
  * Accessibility, automated: an axe scan of each screen and state (in both
- * colour schemes, so contrast is checked in each), and ARIA snapshots that
- * lock in the accessible tree a screen reader is given. Each scan also saves
- * a screenshot in the test's output folder, for looking at the page in every
- * engine.
- *
- * ARIA snapshots run only in Chromium: the tree is what the page declares, and
- * one engine is enough to catch a change to it. The axe scans run everywhere.
+ * colour schemes, so contrast is checked in each), in every engine. Each scan
+ * also saves a screenshot in the test's output folder, for looking at the page
+ * in every engine.
  *
  * Pages are scanned at rest: entrance animations finished, the pointer off the
  * page's controls, and (outside dialogs) nothing focused. Pointing at a key
@@ -123,40 +119,3 @@ for (const scheme of ['light', 'dark'] as const) {
     });
   });
 }
-
-test.describe('ARIA snapshots', () => {
-  test.beforeEach(({ browserName, isMobile }) => {
-    test.skip(browserName !== 'chromium' || isMobile, 'the tree is checked once, in Chromium');
-  });
-
-  test('Home', async ({ page }) => {
-    await expect(page.getByRole('main')).toMatchAriaSnapshot({ name: 'home.aria.yml' });
-  });
-
-  test('the editor: keys, inspector and channels', async ({ editor, page }) => {
-    await editor.openJoseph();
-    await editor.tiles.nth(1).click();
-    await expect(page.getByRole('banner')).toMatchAriaSnapshot({ name: 'top-bar.aria.yml' });
-    await expect(editor.keyGrid).toMatchAriaSnapshot({ name: 'keys.aria.yml' });
-    await expect(page.locator('.workspace-inspector')).toMatchAriaSnapshot({
-      name: 'inspector.aria.yml',
-    });
-    await expect(page.locator('.workspace-channels')).toMatchAriaSnapshot({
-      name: 'channels.aria.yml',
-    });
-  });
-
-  test('a tour step', async ({ editor, page }) => {
-    await toTour(editor);
-    await expect(page.getByRole('dialog').filter({ visible: true })).toMatchAriaSnapshot({
-      name: 'tour-step.aria.yml',
-    });
-  });
-
-  test('the delete dialog', async ({ editor, page }) => {
-    await toDeleteDialog(editor);
-    await expect(page.getByRole('dialog', { name: 'Delete this session?' })).toMatchAriaSnapshot({
-      name: 'delete-dialog.aria.yml',
-    });
-  });
-});

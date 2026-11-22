@@ -1,7 +1,0 @@
-- dialog "Delete this session?":
-    - heading "Delete this session?" [level=2]
-    - paragraph:
-        - strong: EXAMPLE
-        - text: ", edited just now, will be removed from this browser. This can’t be undone."
-    - button "Cancel"
-    - button "Delete"

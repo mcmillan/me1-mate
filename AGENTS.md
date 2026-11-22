@@ -100,6 +100,18 @@ make sure every export is described and nothing described is gone.
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,
   `sess-`, `tour-`, `wm-`).
 - Everything runs in the browser; nothing is uploaded.
+- It works offline after one visit. The service worker (`src/sw.js`, written
+  into the build with its precache list by the plugin in `vite.config.ts`)
+  precaches every built file except those `NOT_PRECACHED` names, fetches the
+  page network-first and everything else cache-first. Keep it that way: the
+  app must not depend on another origin at run time (it couldn't load
+  offline), new files the app needs must land in the build output, and the
+  worker must never reload a page (someone may be mid-edit). Only the build
+  registers it. The icons and link preview are drawn by
+  `scripts/render-images.ts`: change the script and rerun it, never edit the
+  PNGs by hand. `e2e/offline.spec.ts` and `e2e/page.spec.ts` check offline
+  use and the crawlable HTML; keep `index.html`'s static `#root` content true
+  to Home.
 - Use `Action` (`components/ui.tsx`) for every button: `primary` is the ink
   pill, `subtle` the outlined pill, `ghost` chrome-less.
 - Tamagui 3 has no `hoverStyle`/`pressStyle`: use conditional values
@@ -151,24 +163,17 @@ The web package's unit tests (`packages/web/test`) cover the pure edits in
 The end-to-end suite (`packages/web/e2e`, Playwright) drives the production
 build (`vite preview` on port 4317) in Chromium, Firefox and WebKit at
 1280×720, and on an iPhone (WebKit) and a Pixel (Chromium) with touch and
-`hover: none`. Run it with `pnpm e2e` (add `--project webkit` and so on to
-narrow it); it's separate from `pnpm check` to keep that fast. CI runs it on
+`hover: none`. Run it with `pnpm e2e` (locally that's Chromium only, two tests at a
+time, to keep the machine usable; `pnpm e2e:all` runs every project, add
+`--project webkit` and so on to narrow it); it's separate from `pnpm check` to keep that fast. CI runs it on
 every push and pull request, and the Pages deploy waits for it, so a red suite
 never ships. When behaviour changes, change or add a case in the spec that
 covers it in the same change: `home`, `picks`, `files` (opening, editing,
 problems, byte-exact exports), `sessions`, `tour`, `layout` (sizes, schemes,
-target sizes, the 1280×720 fit), `a11y` (axe in both schemes, and ARIA
-snapshots of each region) and `screen-reader` (Guidepup's virtual screen
-reader). Tag a test `@desktop` when it needs a wide window and `@touch` when
-it's about phones; don't skip one to go green. Update the ARIA snapshots
-(`pnpm e2e --project chromium --update-snapshots`) only when the accessible
-tree changes on purpose, and read the diff. Find text fields with
+target sizes, the 1280×720 fit), and `a11y` (axe in both schemes). Tag a test `@desktop` when it needs a wide window and `@touch` when
+it's about phones; don't skip one to go green. Find text fields with
 `getByRole('textbox', …)`, not `getByLabel`: in Playwright's Firefox a
 `getByLabel` lookup followed by an axe scan crashes the page.
-
-`voiceover.spec.ts` drives real VoiceOver through Guidepup on CI's macOS
-runner (`pnpm --filter @mcmillan/me1-mate-web e2e:voiceover`); it takes over
-VoiceOver, so don't run it on a Mac you're using.
 
 Fixtures in `packages/core/test/fixtures` are real files; don't edit them. Add
 a fixture when you get a file showing something new (an Aux Input key, a

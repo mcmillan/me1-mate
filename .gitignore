@@ -6,3 +6,5 @@ e2e-results/
 *.tsbuildinfo
 *.log
 .DS_Store
+test-results/
+playwright-report/
