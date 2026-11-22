@@ -4,8 +4,9 @@ A browser editor for ME-1 configs (`.ME1`) and ME-U channel setups (`.meu`),
 built on [`@mcmillan/me1-mate-core`](../core). Everything runs in the browser;
 files never leave the machine.
 
-Live at <https://mcmillan.github.io/me1-mate/>, deployed by
-`.github/workflows/pages.yml` on every push to `main`.
+Live at <https://me1-mate.msd.audio/>, deployed to GitHub Pages by
+`.github/workflows/pages.yml` on every push to `main`. The custom domain is
+set in the repo's Pages settings, with its DNS record kept in the infra repo.
 
 The app has two screens.
 
@@ -67,7 +68,7 @@ the original, so everything the editor doesn't show is kept.
 pnpm dev        # from the repo root, or `pnpm --filter @mcmillan/me1-mate-web dev`
 pnpm build      # production build into packages/web/dist
 pnpm --filter @mcmillan/me1-mate-web test   # unit tests for src/lib
-BASE_PATH=/me1-mate/ pnpm build   # as deployed to GitHub Pages
+BASE_PATH=/sub/ pnpm build      # to serve from a sub-path instead of a domain's root
 ```
 
 ## Stack
