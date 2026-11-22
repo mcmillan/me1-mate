@@ -83,7 +83,7 @@ src
 ├── components/
 │   ├── Home.tsx, SessionList.tsx    the home screen and the list of sessions
 │   ├── TopBar.tsx       wordmark, config name, undo/redo, open, new, tour, problems, export
-│   ├── Wordmark.tsx     the ME-1 Mate logo, set like a front-panel label
+│   ├── Wordmark.tsx     the ME-1 Mate logo, ME-1 on an orange plate
 │   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout
 │   ├── Inspector.tsx    editor for the selected key
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key
