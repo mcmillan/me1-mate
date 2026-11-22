@@ -262,6 +262,29 @@ const CSS = `
 }
 
 /*
+ * The one-page editor's way to Channels, for a key that takes channels: with
+ * none yet, the invite above says it with an arrow toward the channels (down
+ * where they're under the inspector, to the side where the inspector is a
+ * column beside them); with some, a quiet line says it again.
+ */
+.insp-invite .insp-cue-arrow {
+  flex: none; display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 999px;
+  background: var(--ink); color: var(--canvas);
+}
+.insp-invite[data-key] .insp-cue-arrow { background: var(--k); color: var(--on-key); }
+.insp-cue-arrow svg { display: block; }
+@media (min-width: 1100px) {
+  .insp-cue-arrow svg { rotate: 90deg; }
+  .insp-cue-arrow:dir(rtl) svg { rotate: -90deg; }
+}
+.insp-cue-line { margin: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  /* A nudge toward the channels when the key is selected. */
+  .insp-cue-arrow svg { animation: insp-nudge 900ms var(--spring) 300ms 2 both; }
+}
+@keyframes insp-nudge { 50% { translate: 0 3px; } }
+
+/*
  * In the side column (from 1100px, styles.css) the inspector's wrapper scrolls
  * when a long group is taller than the window. A shadow at an edge says there
  * is more that way; it needs scroll-state queries, or else scroll-driven
@@ -347,7 +370,7 @@ const CSS = `
 @media (forced-colors: active) {
   .insp { border: 1px solid CanvasText; }
   .insp-hero { border-block-end: 1px solid CanvasText; }
-  .insp-type, .insp-chan, .insp-chip, .insp-invite-mark { border: 1px solid CanvasText; }
+  .insp-type, .insp-chan, .insp-chip, .insp-invite-mark, .insp-cue-arrow { border: 1px solid CanvasText; }
   .insp-pill { display: none; }
   .insp :is(.insp-step, .insp-remove) { &&&& { border: 1.5px solid ButtonText; } }
   .insp .insp-step[aria-disabled="true"] { color: GrayText; &&&& { border-color: GrayText; } }
@@ -376,6 +399,25 @@ const Chevron = ({ back = false }: { readonly back?: boolean }) => (
     />
   </svg>
 );
+
+/** An arrow toward the Channels panel; CSS turns it to the side where the panel is beside the inspector. */
+const CueArrow = () => (
+  <span className="insp-cue-arrow" aria-hidden="true">
+    <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path
+        d="M8 2.5v10.5M3.5 8.5 8 13l4.5-4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </span>
+);
+
+/** What to press to give a key channels, on the one-page editor. */
+const PICK_CUE = 'Press a channel’s number in Channels to give it to this key.';
 
 /**
  * A step to the previous or next key. At the ends it stays focusable, so focus
@@ -832,7 +874,11 @@ const PlaysChannel = ({
         </span>
       </div>
       <div id={`${id}-more`}>
-        <Hint>Pick another channel {where} to change it.</Hint>
+        <Hint>
+          {where === 'below'
+            ? 'Pick another channel below to change it.'
+            : 'Press another channel’s number in Channels to change it.'}
+        </Hint>
         <FieldError path={path} />
       </div>
       <Action kind="subtle" className="insp-make target" onPress={onGroup}>
@@ -886,15 +932,31 @@ const PlaysGroup = ({
         </Sub>
         {members.length > 0 && <Hint>Level and pan in the group</Hint>}
       </div>
+      {members.length > 0 && where !== 'below' && (
+        <p className="insp-hint insp-cue-line" data-cue="">
+          Press a number in Channels to add or remove one.
+        </p>
+      )}
       {members.length === 0 ? (
-        <div className="insp-invite" data-key="">
-          <span className="insp-invite-mark" aria-hidden="true">
-            +
-          </span>
-          <p className="insp-copy">
-            <strong>No channels yet.</strong> Pick channels {where} to add them to this group. Each
-            gets its own level here.
-          </p>
+        <div className="insp-invite" data-key="" data-cue={where === 'below' ? undefined : ''}>
+          {where === 'below' ? (
+            <>
+              <span className="insp-invite-mark" aria-hidden="true">
+                +
+              </span>
+              <p className="insp-copy">
+                <strong>No channels yet.</strong> Pick channels below to add them to this group.
+                Each gets its own level here.
+              </p>
+            </>
+          ) : (
+            <>
+              <CueArrow />
+              <p className="insp-copy">
+                <strong>No channels yet.</strong> {PICK_CUE} Each gets its own level here.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         // biome-ignore lint/a11y/noRedundantRoles: Safari drops the list role from a list without markers
@@ -1029,11 +1091,20 @@ export const Inspector = ({
 
         {key.type === 'unassigned' && (
           <div className="insp-plays">
-            <div className="insp-invite">
-              <p className="insp-copy">
-                This key is empty. Pick a channel {where} to give it one, or choose a type.
-              </p>
-            </div>
+            {picker ? (
+              <div className="insp-invite">
+                <p className="insp-copy">
+                  This key is empty. Pick a channel below to give it one, or choose a type.
+                </p>
+              </div>
+            ) : (
+              <div className="insp-invite" data-cue="">
+                <CueArrow />
+                <p className="insp-copy">
+                  <strong>{PICK_CUE}</strong> Or choose a type.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

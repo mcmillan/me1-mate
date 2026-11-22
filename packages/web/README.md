@@ -34,7 +34,16 @@ the same parts arranged for its screen; see below):
   adds the channel or, if it's already in, takes it out. A channel can be in
   one group, so picking it for another group moves it. A chip takes the colour
   of the key that plays it; open chips are channels no key uses. Pointing at a
-  key fades the channels it doesn't play.
+  key fades the channels it doesn't play. While the selected key takes
+  channels, the open chips' edges carry a hint of its colour, and pointing at
+  or focusing a chip rings it in that colour with a `+` (a `−` on a group's
+  own channel); without hover the `+` is always there, small. The inspector
+  says what to press: "Press a channel's number in Channels to give it to
+  this key" (with an arrow toward Channels) for a key with none yet, and a
+  quieter reminder once it has some. Pressing a channel's name instead, while
+  the key could take that channel, shows a one-time tip over its number ("To
+  give Kick to Drums, press its number"); naming carries on as normal, and
+  the tip doesn't come back once a channel has been picked.
 - **Inspector**: the selected key's type (Empty, Channel, Group, Auto, Aux In
   or Tone, three to a row), label, level and mute, its pan, and for a group a
   level and pan for each of its channels. Aux In is the ME-1's rear-panel

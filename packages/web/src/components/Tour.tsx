@@ -87,7 +87,7 @@ const DESKTOP_STEPS: readonly Step[] = [
   {
     id: 'channels',
     title: 'Channels',
-    body: 'These are the 40 channels from your ME-U. Press a channel’s number to give it to the key you picked; press it again to take it away. A key can take one channel or a group of them. You name channels here too.',
+    body: 'These are the 40 channels from your ME-U. Press a channel’s number to give it to the key you picked; press it again to take it away. A key can take one channel or a group of them. The name beside each number is for naming the channel.',
     key: 1,
   },
   {

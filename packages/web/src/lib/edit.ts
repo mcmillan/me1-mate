@@ -288,6 +288,27 @@ export const keyLabel = (system: Editable, key: Key): string => {
   }
 };
 
+/**
+ * The tip for a name field pressed while key `index` can take channels: how
+ * to give that channel to the key instead. The channel goes by its name, else
+ * its number(s); the key by the label it shows on the ME-1 where it has a real
+ * one, else its number.
+ */
+export const pickTip = (system: Editable, index: number, channel: number): string => {
+  const target = pickTarget(system, channel);
+  const name = system.channels[target - 1]?.name;
+  const what =
+    name || (isStereo(system, target) ? `channels ${target}–${target + 1}` : `channel ${target}`);
+  const key = system.keys[index];
+  const own =
+    key?.type === 'channel'
+      ? key.name || system.channels[pickTarget(system, key.channel) - 1]?.name
+      : key && 'name' in key
+        ? key.name
+        : undefined;
+  return `To give ${what} to ${own || `key ${index + 1}`}, press its number`;
+};
+
 /** Set one group member's level; returns the system unchanged if it isn't a member or the level is the same. */
 export const setMemberLevel = (
   system: Editable,

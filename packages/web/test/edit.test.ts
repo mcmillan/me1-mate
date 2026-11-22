@@ -25,6 +25,8 @@ import {
   panSpoken,
   panText,
   pickChannel,
+  pickTip,
+  setChannelName,
   setKey,
   setKeyMuted,
   setKeyName,
@@ -402,6 +404,28 @@ describe('keyLabel', () => {
       ),
     };
     expect(keyLabel(system, system.keys[0] as Key)).toBe('KitPad');
+  });
+});
+
+describe('pickTip', () => {
+  it('names the channel and the key where they have names', () => {
+    const system = setChannelName(
+      withKeys({ type: 'group', name: 'Drums', members: [] }),
+      5,
+      'Kick',
+    );
+    expect(pickTip(system, 0, 5)).toBe('To give Kick to Drums, press its number');
+  });
+
+  it('falls back to numbers, a stereo pair by both', () => {
+    const system = setStereo(withKeys({ type: 'unassigned' }), 7, true);
+    expect(pickTip(system, 0, 3)).toBe('To give channel 3 to key 1, press its number');
+    expect(pickTip(system, 0, 8)).toBe('To give channels 7–8 to key 1, press its number');
+  });
+
+  it("calls a channel key by its channel's name, as the ME-1 shows it", () => {
+    const system = setChannelName(withKeys({ type: 'channel', channel: 2 }), 2, 'Vox');
+    expect(pickTip(system, 0, 9)).toBe('To give channel 9 to Vox, press its number');
   });
 });
 

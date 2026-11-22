@@ -17,6 +17,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   memo,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useId,
@@ -38,6 +39,7 @@ import {
   keyPlays,
   pickChannel,
   pickTarget,
+  pickTip,
   setChannelName,
   setStereo,
 } from '../lib/edit.ts';
@@ -527,6 +529,7 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
   .ch-root .ch-pick:not([data-used]) { box-shadow: inset 0 0 0 1.5px var(--muted); color: var(--ink); }
   .ch-root .ch-slot::after { border-block-end-color: var(--muted); opacity: 1; }
   .ch-root .ch-key[data-empty] { box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .ch-root.ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick:not([data-used]) { box-shadow: inset 0 0 0 1.5px var(--muted); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -551,6 +554,76 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
   }
 }
 @keyframes ch-pop { from { scale: 0.86; } }
+
+/*
+ * The one-page editor's numbers say they can be pressed while the selected key
+ * takes channels. At rest an open one's edge takes a hint of the key's colour;
+ * pointed at or focused, it gets the key's colour as a ring (the ink ring is
+ * for picked) and the "+" on its corner. With no hover to point with, the
+ * corner's "+" is always there, small and quiet. Off, they stay as above.
+ */
+.ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick:not([data-used]) {
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--ch-sel) 55%, var(--line));
+}
+.ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick[aria-pressed="false"]:is(:focus-visible, [data-tip])::after {
+  opacity: 1; scale: 1; border-color: var(--ch-sel);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--ink) 30%, transparent);
+}
+.ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick[aria-pressed="false"]:focus-visible { outline-offset: 5px; }
+@media (hover: hover) {
+  .ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick[aria-pressed="false"]:hover::after {
+    opacity: 1; scale: 1; border-color: var(--ch-sel);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--ink) 30%, transparent);
+  }
+}
+.ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick[aria-pressed="false"]:not([data-used]):focus-visible,
+.ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick[data-tip]:not([data-used]) {
+  background: color-mix(in oklab, var(--ch-sel) 30%, var(--card));
+  color: var(--ink);
+}
+@media (hover: none) {
+  .ch-root .ch-grid[data-variant="all"]:not([data-mode="off"]) .ch-pick[aria-pressed="false"]:not([data-used])::before { opacity: 0.7; scale: 0.75; }
+}
+/* The number the tip points at: the ring beckons a few times, and the "+" stays while the tip is up. */
+.ch-root .ch-grid[data-variant="all"] .ch-pick[data-tip] { anchor-name: --ch-tip; }
+.ch-root .ch-grid[data-variant="all"] .ch-pick[data-tip]::before { opacity: 1; scale: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .ch-root .ch-grid[data-variant="all"] .ch-pick[data-tip]::after { animation: ch-beckon 800ms ease-out 3; }
+}
+@keyframes ch-beckon { from { opacity: 0; scale: 1.4; } 60% { opacity: 1; scale: 1; } }
+
+/*
+ * The tip for a name pressed while a key takes channels: an ink card, as the
+ * toasts are, tethered above the channel's number with anchor positioning
+ * (placed by script where that's missing). It's a manual popover, so it stays
+ * while the name is typed, until it's dismissed or the field is left. The
+ * page's reset unsets a popover's own styles, so the box and the closed state
+ * are set here.
+ */
+.ch-root .ch-tipcard {
+  position: fixed; inset: auto; box-sizing: border-box; display: flex; align-items: center; gap: 4px;
+  inline-size: max-content; max-inline-size: min(23rem, 100vw - 32px); margin: 0;
+  padding: 4px 4px 4px 14px; border: 1.5px solid transparent; border-radius: 18px; overflow: visible;
+  background: var(--ink); color: var(--canvas); box-shadow: var(--shadow);
+}
+.ch-root .ch-tipcard[popover]:not(:popover-open) { display: none; }
+@supports (position-area: block-start) {
+  .ch-root .ch-tipcard {
+    position-anchor: --ch-tip; position-area: block-start span-inline-end; margin-block-end: 10px;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
+}
+.ch-root .ch-tiptext { padding-block: 6px; font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1.35; }
+.ch-root .ch-tipcard button { flex: none; min-inline-size: max(30px, var(--target)); min-block-size: max(30px, var(--target)); }
+.ch-root .ch-tipcard button.ch-tipx:focus-visible { background: var(--canvas); outline: 3px solid var(--focus); outline-offset: 0; }
+.ch-root .ch-tipcard button.ch-tipx:focus-visible * { color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .ch-root .ch-tipcard { transition: opacity 160ms ease-out, translate 260ms var(--spring); }
+  @starting-style { .ch-root .ch-tipcard { opacity: 0; translate: 0 4px; } }
+}
+@media (forced-colors: active) {
+  .ch-root .ch-tipcard { border-color: CanvasText; }
+}
 
 /*
  * The key sheet's picker (phone layout): a tile per channel, four to a row (a
@@ -648,12 +721,19 @@ const spoken = (system: Editable, channel: number): string =>
   system.channels[channel - 1]?.name ||
   (isStereo(system, channel) ? `Channels ${channel}+${channel + 1}` : `Channel ${channel}`);
 
+/**
+ * Whether the tip for a pressed name is used up for this visit: it shows once,
+ * and not at all once a channel has been picked, since then picking is known.
+ */
+const pickTipDoneAtom = atom(false);
+
 /** Pick `channel` for the selected key, and say so when that takes it from another group. */
 const pickAtom = atom(null, (get, set, channel: number) => {
   const system = get(systemAtom);
   const index = get(selectedKeyAtom);
   const key = system.keys[index];
   if (!canPick(key)) return;
+  set(pickTipDoneAtom, true);
   const target = pickTarget(system, channel);
   const from =
     key?.type === 'group' && !keyPlays(system, key, target)
@@ -692,12 +772,28 @@ const KeyPill = ({ index, label }: { index: number; label?: string }) => (
   </span>
 );
 
-/** One line on what picking a channel will do for the selected key. */
-const Instruction = ({ system, index }: { system: Editable; index: number }) => {
+/**
+ * One line on what picking a channel will do for the selected key. The
+ * one-page editor (`numbers`) says what to press, since there each channel
+ * is a number beside a name field; the phone's tiles are pressed whole.
+ */
+const Instruction = ({
+  system,
+  index,
+  numbers = false,
+}: {
+  system: Editable;
+  index: number;
+  numbers?: boolean;
+}) => {
   const key = system.keys[index];
   switch (key?.type) {
     case 'unassigned':
-      return (
+      return numbers ? (
+        <>
+          Press a channel’s number to give it to <KeyPill index={index} />
+        </>
+      ) : (
         <>
           Pick a channel for <KeyPill index={index} />
         </>
@@ -708,14 +804,16 @@ const Instruction = ({ system, index }: { system: Editable; index: number }) => 
       return (
         <>
           <KeyPill index={index} label={keyLabel(system, key)} /> is on ch {first}
-          {isStereo(system, first) ? `+${first + 1}` : ''}: pick another to change it
+          {isStereo(system, first) ? `+${first + 1}` : ''}:{' '}
+          {numbers ? 'press another number to change it' : 'pick another to change it'}
         </>
       );
     }
     case 'group':
       return (
         <>
-          <KeyPill index={index} label={keyLabel(system, key)} /> pick channels to add or remove
+          <KeyPill index={index} label={keyLabel(system, key)} />{' '}
+          {numbers ? 'press numbers to add or remove channels' : 'pick channels to add or remove'}
         </>
       );
     case 'auto':
@@ -848,6 +946,8 @@ interface PickProps {
   readonly hintId: string;
   readonly stop: string | null;
   readonly onPick: (channel: number) => void;
+  /** The tip for a pressed name points at it. */
+  readonly tipped?: boolean;
   /**
    * How it's drawn: a round chip beside the channel's name (`chip`); a tile
    * with the name inside, in the key sheet's picker (`tile`); or, on the
@@ -869,6 +969,7 @@ const Pick = ({
   hintId,
   stop,
   onPick,
+  tipped = false,
   look = 'chip',
 }: PickProps) => {
   const id = `p${channel}`;
@@ -922,6 +1023,7 @@ const Pick = ({
       data-used={owner ? '' : undefined}
       data-linked={tile && linked ? '' : undefined}
       data-dim={dim ? '' : undefined}
+      data-tip={tipped ? '' : undefined}
       data-stop={id}
       tabIndex={stop === id ? 0 : -1}
       style={owner && keyStyle(owner.index)}
@@ -1128,6 +1230,8 @@ interface PairProps {
   readonly onSelectKey: (index: number) => void;
   /** The phone's Channels screen: names and links only; nothing is picked here. */
   readonly naming: boolean;
+  /** The channel the tip for a pressed name points at, when it's in this pair. */
+  readonly tip: number | null;
 }
 
 const sameUses = (a: readonly KeyUse[], b: readonly KeyUse[]): boolean =>
@@ -1174,6 +1278,7 @@ const Pair = memo((props: PairProps) => {
         pressed={props.pressedA}
         uses={props.usesA}
         dim={!dim && props.dimA}
+        tipped={props.tip === first}
       />
       <Name
         channel={first}
@@ -1215,6 +1320,7 @@ const Pair = memo((props: PairProps) => {
             pressed={props.pressedB}
             uses={props.usesB}
             dim={!dim && props.dimB}
+            tipped={props.tip === second}
           />
           <Name
             channel={second}
@@ -1232,6 +1338,74 @@ const Pair = memo((props: PairProps) => {
     </div>
   );
 }, samePair);
+
+// ---- the tip for a pressed name ---------------------------------------------
+
+const SUPPORTS_POPOVER =
+  typeof HTMLElement !== 'undefined' && Object.hasOwn(HTMLElement.prototype, 'popover');
+const NATIVE_ANCHORS = globalThis.CSS?.supports('position-area: block-start') ?? false;
+
+const TIP_GAP = 10;
+const TIP_EDGE = 8;
+
+/** Without anchor positioning: above the number, else below it, kept in the window. */
+const placeTip = (tip: HTMLElement, number: HTMLElement) => {
+  const n = number.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  const above = n.top - TIP_GAP - t.height;
+  const top = above >= TIP_EDGE ? above : Math.min(n.bottom + TIP_GAP, vh - TIP_EDGE - t.height);
+  const left = Math.max(TIP_EDGE, Math.min(n.left, vw - TIP_EDGE - t.width));
+  tip.style.top = `${top}px`;
+  tip.style.left = `${left}px`;
+};
+
+/**
+ * A one-time tip, shown when a channel's name is pressed while the selected
+ * key takes channels and doesn't have that channel: the name is for naming,
+ * and its number gives it to the key. A manual popover over the number; it
+ * neither takes focus nor stops the typing.
+ */
+const PickTipCard = ({
+  channel,
+  text,
+  onDismiss,
+}: {
+  readonly channel: number;
+  readonly text: string;
+  readonly onDismiss: () => void;
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (SUPPORTS_POPOVER && !el.matches(':popover-open')) el.showPopover();
+    const number = document.querySelector<HTMLElement>(`.ch-pick[data-stop="p${channel}"]`);
+    if (!NATIVE_ANCHORS && number) placeTip(el, number);
+  }, [channel]);
+  return (
+    <div
+      ref={ref}
+      className="ch-tipcard"
+      data-tip-for={channel}
+      {...(SUPPORTS_POPOVER ? ({ popover: 'manual' } as Record<string, string>) : {})}
+    >
+      <span className="ch-tiptext">{text}</span>
+      <Action
+        kind="ghost"
+        className="ch-tipx"
+        px="0"
+        color="background"
+        bg={{ default: 'transparent', hover: 'color-10', press: 'color-10' }}
+        aria-label="Dismiss tip"
+        onPress={onDismiss}
+      >
+        ✕
+      </Action>
+    </div>
+  );
+};
 
 // ---- the panel -------------------------------------------------------------
 
@@ -1277,6 +1451,9 @@ export const ChannelGrid = ({
   const hintId = useId();
   const grid = useRef<HTMLDivElement>(null);
   const [stop, setStop] = useState(FIRST_STOP);
+  const [tipDone, setTipDone] = useAtom(pickTipDoneAtom);
+  /** The tip for a pressed name, while it's up. */
+  const [tip, setTip] = useState<{ channel: number; text: string } | null>(null);
   /** The pick button, link or key marker with focus: an edit or an undo can take it away. */
   const focused = useRef<{ el: HTMLElement; stop: string } | null>(null);
 
@@ -1309,6 +1486,26 @@ export const ChannelGrid = ({
     const pickOf = (id: string) => grid.current?.querySelector<HTMLElement>(`[data-stop="${id}"]`);
     (pickOf(`p${lost.stop.slice(1)}`) ?? pickOf(`p${pairOfStop(lost.stop)}`))?.focus();
   }, [system]);
+
+  // The tip goes with the key it was about.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the selection changes
+  useEffect(() => setTip(null), [selected]);
+  // Gone too once the key can't take channels or has that one now (an undo, a pick from elsewhere).
+  const tipShown = tip && canPick(key) && !keyPlays(system, key, tip.channel) ? tip : null;
+
+  /** A name pressed (not tabbed to) while the key takes channels: once, say what gives the channel to it. */
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (variant !== 'all' || tipDone || !canPick(key)) return;
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement) || !target.dataset.channel) return;
+    if (target === document.activeElement) return;
+    const channel = Number(target.dataset.channel);
+    if (keyPlays(system, key, channel)) return;
+    const text = pickTip(system, selected, channel);
+    setTipDone(true);
+    setTip({ channel, text });
+    announce(text);
+  };
 
   // Don't leave a key pointed at when the region goes away under the pointer.
   useEffect(() => () => setHighlight(null), [setHighlight]);
@@ -1373,6 +1570,13 @@ export const ChannelGrid = ({
     if (focused.current?.el === e.target && e.target.isConnected) focused.current = null;
     const marker = keyOfMarker(e.target);
     if (marker !== undefined) setHighlight((current) => (current === marker ? null : current));
+    // Leaving the name the tip is about puts the tip away, unless focus went to the tip itself.
+    if (
+      tip &&
+      e.target instanceof HTMLInputElement &&
+      !(e.relatedTarget instanceof Element && e.relatedTarget.closest('.ch-tipcard'))
+    )
+      setTip(null);
     // Leaving the panel: Tab comes back in at the first pick button.
     if (e.relatedTarget instanceof Node && !e.currentTarget.contains(e.relatedTarget))
       setStop(FIRST_STOP);
@@ -1414,6 +1618,7 @@ export const ChannelGrid = ({
     onBlur,
     onMouseOver,
     onMouseOut,
+    onPointerDown,
   };
 
   if (variant === 'pick') {
@@ -1465,7 +1670,7 @@ export const ChannelGrid = ({
           {variant === 'names' ? (
             'Name your channels and link stereo pairs. A key’s channels are picked from its own page, on Keys.'
           ) : (
-            <Instruction system={system} index={selected} />
+            <Instruction system={system} index={selected} numbers />
           )}
         </p>
         <p className="ch-tip">
@@ -1495,11 +1700,21 @@ export const ChannelGrid = ({
               hintId={hintId}
               stop={pairOfStop(stop) === first ? stop : null}
               naming={variant === 'names'}
+              tip={
+                tipShown && pairOfStop(`p${tipShown.channel}`) === first ? tipShown.channel : null
+              }
               {...handlers}
             />
           );
         })}
       </div>
+      {tipShown && (
+        <PickTipCard
+          channel={tipShown.channel}
+          text={tipShown.text}
+          onDismiss={() => setTip(null)}
+        />
+      )}
     </Card>
   );
 };
