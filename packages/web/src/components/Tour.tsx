@@ -63,8 +63,7 @@ const STEPS: readonly Step[] = [
 ];
 
 /** Set once the tour has been finished or skipped, so it doesn't start by itself again. */
-// Keeps the app's first name, so the tour stays seen across the rename.
-const SEEN_KEY = '2me2u:tour:v1';
+const SEEN_KEY = 'me1-mate:tour:v1';
 /** For this visit, where storage can't be read or written. */
 let seenThisVisit = false;
 

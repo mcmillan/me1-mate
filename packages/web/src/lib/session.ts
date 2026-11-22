@@ -25,11 +25,8 @@ import {
 } from './store.ts';
 
 /** The list of sessions, newest first: enough to show them without reading each one. */
-// The keys keep the app's first name, 2me2u, so sessions saved before the rename still open.
-const INDEX_KEY = '2me2u:sessions:v2';
-const bodyKey = (id: string): string => `2me2u:session:v2:${id}`;
-/** The single session earlier versions kept; it's moved into the list when found. */
-const LEGACY_KEY = '2me2u:session:v1';
+const INDEX_KEY = 'me1-mate:sessions:v1';
+const bodyKey = (id: string): string => `me1-mate:session:v1:${id}`;
 /** Older sessions beyond this many are dropped, oldest first. */
 const MAX_SESSIONS = 12;
 const DEBOUNCE_MS = 500;
@@ -56,7 +53,7 @@ export interface SessionSummary {
 
 /** A whole saved session, as stored. */
 interface Session {
-  readonly version: 2;
+  readonly version: 1;
   readonly id: string;
   readonly savedAt: number;
   readonly configName: string;
@@ -165,26 +162,10 @@ const summarise = (session: Session): SessionSummary => {
 const newestFirst = (list: readonly SessionSummary[]): SessionSummary[] =>
   [...list].sort((a, b) => b.savedAt - a.savedAt);
 
-/** The session the previous version kept, moved into the list; `null` if there isn't one. */
-const adoptLegacy = (): SessionSummary | null => {
-  const old = readJSON(LEGACY_KEY);
-  if (!isRecord(old) || !Array.isArray(old.keys) || !Array.isArray(old.channels)) return null;
-  const session = { ...old, version: 2, id: crypto.randomUUID() };
-  if (!isSession(session)) return null;
-  if (write(bodyKey(session.id), session) !== 'ok') return null;
-  remove(LEGACY_KEY);
-  return summarise(session);
-};
-
 /** The saved sessions, newest first. */
 const readIndex = (): SessionSummary[] => {
   const stored = readJSON(INDEX_KEY);
-  const list = Array.isArray(stored) ? stored.filter(isSummary) : [];
-  const adopted = adoptLegacy();
-  if (!adopted) return newestFirst(list);
-  const next = newestFirst([adopted, ...list]);
-  write(INDEX_KEY, next);
-  return next;
+  return newestFirst(Array.isArray(stored) ? stored.filter(isSummary) : []);
 };
 
 /**
@@ -354,7 +335,7 @@ export const useAutosave = (): void => {
       }
       const result = storeSession(
         {
-          version: 2,
+          version: 1,
           id: sessionId,
           savedAt: Date.now(),
           configName,

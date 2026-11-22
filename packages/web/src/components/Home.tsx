@@ -356,7 +356,7 @@ export const Home = () => {
             Josh McMillan
           </a>
           . The code is on{' '}
-          <a href="https://github.com/mcmillan/2me2u" target="_blank" rel="noreferrer">
+          <a href="https://github.com/mcmillan/me1-mate" target="_blank" rel="noreferrer">
             GitHub
           </a>
           . Not affiliated with Allen &amp; Heath.
