@@ -55,13 +55,13 @@ const scan = async (page: Page, info: TestInfo, name: string, { blur = true } = 
 
 const toTour = async (editor: Editor) => {
   await editor.startNew();
-  await editor.button('Show me around').click();
+  await editor.command('Show me around');
   await expect(editor.page.getByRole('dialog').filter({ visible: true })).toBeVisible();
 };
 
 const toDeleteDialog = async (editor: Editor) => {
   await editor.button('Try the example').click();
-  await editor.home.click();
+  await editor.goHome();
   await editor.sessions
     .getByRole('button', { name: /^Delete / })
     .first()
@@ -79,7 +79,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     test(`Home with a session, ${scheme}`, async ({ editor, page }, info) => {
       await editor.button('Try the example').click();
-      await editor.home.click();
+      await editor.goHome();
       await expect(editor.sessions).toBeVisible();
       await scan(page, info, `home-sessions-${scheme}`);
     });
@@ -106,6 +106,13 @@ for (const scheme of ['light', 'dark'] as const) {
       await editor.label.press('Tab');
       await expect(page.getByText(/Key 2's label/).filter({ visible: true })).not.toHaveCount(0);
       await scan(page, info, `editor-problem-${scheme}`);
+    });
+
+    test(`the phone's Channels screen, ${scheme} @touch`, async ({ editor, page }, info) => {
+      await editor.openJoseph();
+      await editor.screenTab('Channels').click();
+      await expect(editor.channelName(1)).toBeVisible();
+      await scan(page, info, `phone-channels-${scheme}`);
     });
 
     test(`the tour, ${scheme}`, async ({ editor, page }, info) => {

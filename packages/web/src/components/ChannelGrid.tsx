@@ -553,6 +553,48 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
 @keyframes ch-pop { from { scale: 0.86; } }
 
 /*
+ * The key sheet's picker (phone layout): a tile per channel, four to a row (a
+ * linked pair is one tile, two wide), so two pairs to a row. Each tile is
+ * the pick button itself, big enough for a finger, with the channel's number,
+ * its name under it and, on the corner, the numbers of the keys that play it.
+ * The rings, the colours and what pressing does are the chips'.
+ */
+.ch-root.ch-picker { display: grid; gap: 12px; padding: 4px 18px max(24px, env(safe-area-inset-bottom)); }
+.ch-root .ch-subtitle { margin: 0; font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1.35; color: var(--muted); }
+.ch-root.ch-picker .ch-head { display: grid; gap: 2px; }
+.ch-root.ch-picker .ch-hint { flex: none; }
+.ch-root .ch-grid[data-variant="pick"] { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ch-root .ch-grid[data-variant="pick"] .ch-pick {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto;
+  align-content: space-between; align-items: start; justify-items: start; column-gap: 4px; row-gap: 2px;
+  min-inline-size: 0; min-block-size: 60px; padding: 8px 9px 8px 10px;
+  border-radius: 14px; background: var(--well); box-shadow: none; color: var(--ink); text-align: start;
+}
+.ch-root .ch-grid[data-variant="pick"] .ch-pick[data-linked] { grid-column: span 2; }
+.ch-root .ch-grid[data-variant="pick"] .ch-pick[data-used] { background: var(--k); color: var(--on-key); }
+.ch-root .ch-grid[data-variant="pick"] .ch-num { grid-area: 1 / 1; font-size: 1rem; font-weight: var(--w-strong); }
+.ch-root .ch-grid[data-variant="pick"] .ch-pick:not([data-used]) .ch-num { color: var(--muted); }
+.ch-root .ch-pname {
+  grid-area: 2 / 1 / 3 / 3; justify-self: stretch; min-inline-size: 0;
+  font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ch-root .ch-pname:empty::before { content: "\\00a0"; }
+.ch-root .ch-owners {
+  grid-area: 1 / 2; font-size: 0.6875rem; font-weight: var(--w-ui); line-height: 1.45;
+  font-feature-settings: normal; opacity: 0.78; white-space: nowrap;
+}
+.ch-root .ch-grid[data-variant="pick"] .ch-pick::after { inset: -4.5px; border-width: 2.5px; border-radius: 18px; }
+.ch-root .ch-grid[data-variant="pick"] .ch-pick::before { inset-block-start: -7px; inset-inline-start: -7px; inline-size: 1.25rem; block-size: 1.25rem; font-size: 0.8125rem; }
+/* With no hover, a press shows what it did: the tile dips, and an open one takes a wash of the key's colour. */
+.ch-root .ch-grid[data-variant="pick"]:not([data-mode="off"]) .ch-pick:not([data-used]):active { background: color-mix(in oklab, var(--ch-sel) 40%, var(--well)); }
+.ch-root .ch-grid[data-variant="pick"][data-mode="off"] .ch-pick[data-used] { background: color-mix(in oklab, var(--k) 42%, var(--well)); color: var(--ink); }
+
+/* The phone's Channels screen: a chip that pictures who plays the channel, and does nothing when pressed. */
+.ch-root .ch-still { display: inline-grid; place-items: center; box-sizing: border-box; cursor: default; }
+.ch-root .ch-pair[data-linked] .ch-still { padding-inline: 9px; }
+
+/*
  * Forced colours drop the fills and shadows and put a plate in the page's
  * colour behind text, so a cell can't be a fill, a state can't be a fill with
  * text on it, and a key can't be a colour: its number on the markers says
@@ -587,8 +629,16 @@ const nameId = (channel: number) => `channel-name-${channel}`;
 /** The longest name a channel can have. */
 const NAME_MAX = 6;
 
-/** The pick button that takes Tab when focus arrives from outside. */
-const FIRST_STOP = 'p1';
+/** The control that takes Tab when focus arrives from outside: the first pick button, or with none (`naming`) the first link. */
+const firstStopOf = (variant: Variant): string => (variant === 'names' ? 'l1' : 'p1');
+
+/**
+ * Which channel grid: the whole of it (`all`, the one-page editor); only the
+ * pick tiles, for the key open in the phone's key sheet (`pick`); or only the
+ * names and links, on the phone's Channels screen, where no key is selected
+ * (`names`).
+ */
+type Variant = 'all' | 'pick' | 'names';
 
 // ---- picking ---------------------------------------------------------------
 
@@ -782,6 +832,13 @@ interface PickProps {
   readonly hintId: string;
   readonly stop: string | null;
   readonly onPick: (channel: number) => void;
+  /**
+   * How it's drawn: a round chip beside the channel's name (`chip`); a tile
+   * with the name inside, in the key sheet's picker (`tile`); or, on the
+   * phone's Channels screen, where nothing is picked, a chip that is only a
+   * picture of who plays the channel (`still`).
+   */
+  readonly look?: 'chip' | 'tile' | 'still';
 }
 
 /** A channel's number, which assigns it to the selected key; a stereo pair has one for both. */
@@ -796,6 +853,7 @@ const Pick = ({
   hintId,
   stop,
   onPick,
+  look = 'chip',
 }: PickProps) => {
   const id = `p${channel}`;
   const ref = useRef<TamaguiElement>(null);
@@ -812,6 +870,28 @@ const Pick = ({
   const shown = linked ? `${channel}–${channel + 1}` : String(channel);
   const numbers = `${linked ? 'Channels' : 'Channel'} ${shown}`;
   const [owner, ...others] = uses;
+  if (look === 'still') {
+    return (
+      <span
+        className="ch-pick ch-still"
+        aria-hidden="true"
+        data-used={owner ? '' : undefined}
+        style={owner && keyStyle(owner.index)}
+      >
+        <span className="ch-num">{shown}</span>
+      </span>
+    );
+  }
+  const tile = look === 'tile';
+  // A tile says who plays it in figures too, so the colour isn't the only sign.
+  const players = uses.map((use) => String(use.index + 1).padStart(2, '0'));
+  const said = [
+    numbers,
+    name,
+    tile && players.length > 0 ? `played by key ${players.join(' and ')}` : '',
+  ]
+    .filter(Boolean)
+    .join(tile ? ', ' : ' ');
   return (
     <Action
       className="ch-pick target"
@@ -821,9 +901,10 @@ const Pick = ({
       borderWidth={0}
       aria-pressed={pressed}
       ref={ref}
-      aria-label={name ? `${numbers} ${name}` : numbers}
+      aria-label={tile ? said : name ? `${numbers} ${name}` : numbers}
       aria-describedby={hintId}
       data-used={owner ? '' : undefined}
+      data-linked={tile && linked ? '' : undefined}
       data-dim={dim ? '' : undefined}
       data-stop={id}
       tabIndex={stop === id ? 0 : -1}
@@ -831,7 +912,19 @@ const Pick = ({
       onPress={() => onPick(channel)}
     >
       <span className="ch-num">{shown}</span>
-      {others.length > 0 && (
+      {tile && (
+        <>
+          <span className="ch-pname" aria-hidden="true">
+            {name}
+          </span>
+          {players.length > 0 && (
+            <span className="ch-owners" aria-hidden="true">
+              {players.join(' ')}
+            </span>
+          )}
+        </>
+      )}
+      {!tile && others.length > 0 && (
         <span className="ch-dots" aria-hidden="true">
           {others.map((use) => (
             <span key={use.index} className="ch-dot" style={keyStyle(use.index)} />
@@ -848,6 +941,8 @@ interface TagsProps {
   readonly selected: number;
   readonly stop: string | null;
   readonly onSelectKey: (index: number) => void;
+  /** On the phone's Channels screen a marker opens its key, and each is a tab stop of its own. */
+  readonly opens?: boolean;
 }
 
 /**
@@ -856,13 +951,13 @@ interface TagsProps {
  * that key. Tab reaches them after the name of the
  * channel whose pick button has focus, so they don't slow the arrow keys down.
  */
-const Tags = ({ channel, uses, selected, stop, onSelectKey }: TagsProps) =>
+const Tags = ({ channel, uses, selected, stop, onSelectKey, opens = false }: TagsProps) =>
   uses.length === 0 ? null : (
     <div className="ch-tags">
       {uses.map((use) => {
         const current = use.index === selected;
         // The key's number as the marker shows it (two digits), for voice control.
-        const label = `Used by key ${String(use.index + 1).padStart(2, '0')}, ${use.label}${current ? ' (selected)' : ': select it'}`;
+        const label = `Used by key ${String(use.index + 1).padStart(2, '0')}, ${use.label}${opens ? ': open it' : current ? ' (selected)' : ': select it'}`;
         return (
           <Action
             key={use.index}
@@ -872,11 +967,11 @@ const Tags = ({ channel, uses, selected, stop, onSelectKey }: TagsProps) =>
             minH={0}
             borderWidth={0}
             aria-label={label}
-            aria-current={current ? 'true' : undefined}
+            aria-current={current && !opens ? 'true' : undefined}
             {...tooltip(label)}
             data-key={use.index}
             data-of={`p${channel}`}
-            tabIndex={stop === `p${channel}` ? 0 : -1}
+            tabIndex={opens || stop === `p${channel}` ? 0 : -1}
             onPress={() => onSelectKey(use.index)}
           >
             <span className="ch-face" style={keyStyle(use.index)}>
@@ -1015,6 +1110,8 @@ interface PairProps {
   readonly onPick: (channel: number) => void;
   readonly onLink: (first: number, linked: boolean) => void;
   readonly onSelectKey: (index: number) => void;
+  /** The phone's Channels screen: names and links only; nothing is picked here. */
+  readonly naming: boolean;
 }
 
 const sameUses = (a: readonly KeyUse[], b: readonly KeyUse[]): boolean =>
@@ -1036,8 +1133,9 @@ const Pair = memo((props: PairProps) => {
   const second = first + 1;
   const link = `Link channels ${first} and ${second} as a stereo pair`;
   const linkId = `l${first}`;
-  const pick = { linked, pickable, hintId, stop, onPick: props.onPick };
-  const tags = { selected, stop, onSelectKey: props.onSelectKey };
+  const look = props.naming ? ('still' as const) : ('chip' as const);
+  const pick = { linked, pickable, hintId, stop, onPick: props.onPick, look };
+  const tags = { selected, stop, onSelectKey: props.onSelectKey, opens: props.naming };
   // The whole pair fades as one; otherwise each channel does.
   const dim = props.dimA && (linked || props.dimB);
   // A linked pair is tinted with the colour of the key that plays it.
@@ -1141,8 +1239,19 @@ const stopOf = (el: HTMLElement): string | undefined => el.dataset.stop ?? el.da
  * button to that channel's name and then its key markers. Each pair is a
  * group; the region isn't a toolbar or a grid, because it holds text fields
  * that Tab has to reach.
+ *
+ * The phone layout places it twice (see `Variant`): its pick tiles in a key's
+ * sheet, and its names and links on the Channels screen, where pressing a
+ * key's marker opens that key (`onOpenKey`).
  */
-export const ChannelGrid = () => {
+export const ChannelGrid = ({
+  variant = 'all',
+  onOpenKey,
+}: {
+  readonly variant?: Variant;
+  readonly onOpenKey?: (index: number) => void;
+} = {}) => {
+  const FIRST_STOP = firstStopOf(variant);
   const system = useAtomValue(systemAtom);
   const [selected, setSelected] = useAtom(selectedKeyAtom);
   const [highlight, setHighlight] = useAtom(highlightKeyAtom);
@@ -1269,38 +1378,86 @@ export const ChannelGrid = () => {
     () => ({
       onPick: (channel: number) => pick(channel),
       onLink: (first: number, linked: boolean) => edit((s) => setStereo(s, first, linked)),
-      onSelectKey: (index: number) => setSelected(index),
+      onSelectKey: (index: number) => {
+        setSelected(index);
+        onOpenKey?.(index);
+      },
     }),
-    [pick, edit, setSelected],
+    [pick, edit, setSelected, onOpenKey],
   );
+
+  const gridProps = {
+    ref: grid,
+    'data-mode': variant === 'names' ? 'names' : modeOf(key),
+    'data-variant': variant,
+    'data-switch': key?.type === 'channel' ? '' : undefined,
+    'data-spot': spot ?? undefined,
+    style: { '--ch-sel': keyColor(selected) } as CSSProperties,
+    onKeyDown,
+    onFocus,
+    onBlur,
+    onMouseOver,
+    onMouseOut,
+  };
+
+  if (variant === 'pick') {
+    // The key sheet: a tile per channel (a linked pair is one, twice as wide), and nothing else.
+    return (
+      <section className="ch-root ch-picker" aria-labelledby={titleId}>
+        <style>{CSS}</style>
+        <div className="ch-head">
+          <h3 id={titleId} className="ch-subtitle">
+            Channels
+          </h3>
+          <p id={hintId} className="ch-hint">
+            <Instruction system={system} index={selected} />
+          </p>
+        </div>
+        <div className="ch-grid" {...gridProps}>
+          {PAIRS.flatMap((first) => {
+            const linked = isStereo(system, first);
+            return (linked ? [first] : [first, first + 1]).map((channel) => (
+              <Pick
+                key={channel}
+                look="tile"
+                channel={channel}
+                linked={linked}
+                name={system.channels[channel - 1]?.name ?? ''}
+                pressed={keyPlays(system, key, channel)}
+                uses={uses[channel - 1] ?? []}
+                dim={false}
+                pickable={canPick(key)}
+                hintId={hintId}
+                stop={stop}
+                onPick={handlers.onPick}
+              />
+            ));
+          })}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <Card render="section" className="ch-root" aria-labelledby={titleId}>
       <style>{CSS}</style>
       <div className="ch-head">
-        <PanelTitle id={titleId}>Channels</PanelTitle>
+        <PanelTitle id={titleId} className={variant === 'names' ? 'display ch-vh' : 'display'}>
+          Channels
+        </PanelTitle>
         <p id={hintId} className="ch-hint">
-          <Instruction system={system} index={selected} />
+          {variant === 'names' ? (
+            'Name your channels and link stereo pairs. A key’s channels are picked from its own page, on Keys.'
+          ) : (
+            <Instruction system={system} index={selected} />
+          )}
         </p>
         <p className="ch-tip">
           Names up to {NAME_MAX} characters
           <span className="ch-tip-more"> · Enter for the next</span>
         </p>
       </div>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: it listens for the controls inside it; the section is the landmark and each pair a group, so a role here would only add noise */}
-      <div
-        ref={grid}
-        className="ch-grid"
-        data-mode={modeOf(key)}
-        data-switch={key?.type === 'channel' ? '' : undefined}
-        data-spot={spot ?? undefined}
-        style={{ '--ch-sel': keyColor(selected) } as CSSProperties}
-        onKeyDown={onKeyDown}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onMouseOver={onMouseOver}
-        onMouseOut={onMouseOut}
-      >
+      <div className="ch-grid" {...gridProps}>
         {PAIRS.map((first) => {
           const second = first + 1;
           const linked = isStereo(system, first);
@@ -1321,6 +1478,7 @@ export const ChannelGrid = () => {
               pickable={canPick(key)}
               hintId={hintId}
               stop={pairOfStop(stop) === first ? stop : null}
+              naming={variant === 'names'}
               {...handlers}
             />
           );

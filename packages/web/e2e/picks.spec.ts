@@ -4,7 +4,7 @@ test.beforeEach(async ({ editor }) => {
   await editor.startNew();
 });
 
-test('picking channels for keys, from scratch', async ({ editor }) => {
+test('picking channels for keys, from scratch @desktop', async ({ editor }) => {
   const { pick, tiles } = editor;
   await pick(5).click();
   await expect(tiles.nth(0), 'an empty key becomes a channel key').toHaveAttribute(
@@ -67,7 +67,7 @@ test('picking channels for keys, from scratch', async ({ editor }) => {
   expect([k1, k2], 'an unused channel has no colour').not.toContain(await bg(pick(20)));
 });
 
-test('undoing back to where you started is not unsaved work', async ({ editor }) => {
+test('undoing back to where you started is not unsaved work @desktop', async ({ editor }) => {
   await editor.tiles.nth(0).click();
   await editor.pick(6).click();
   await expect(editor.unsaved, 'an edit is unsaved').toBeVisible();
@@ -75,7 +75,7 @@ test('undoing back to where you started is not unsaved work', async ({ editor })
   await expect(editor.unsaved, 'undoing it clears the marker').toBeHidden();
 });
 
-test('linking a pair keeps the key on it', async ({ editor, page }) => {
+test('linking a pair keeps the key on it @desktop', async ({ editor, page }) => {
   await editor.tiles.nth(0).click();
   await editor.pick(6).click();
   await editor.button('Link channels 5 and 6 as a stereo pair').click();

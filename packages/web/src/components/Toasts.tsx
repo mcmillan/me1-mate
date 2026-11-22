@@ -71,11 +71,15 @@ const TONE_KEY = { success: 11, info: 3, error: undefined } as const;
 
 type AriaNotify = (announcement: string) => void;
 
-/** True while a modal `<dialog>` is open; toasts wait until it closes. */
+/**
+ * True while a modal `<dialog>` is open; toasts wait until it closes. The
+ * phone's key sheet doesn't count: it's where the editing happens, and what a
+ * pick did ("moved from key 1") is said over it.
+ */
 const useModalOpen = (): boolean => {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    const check = () => setOpen(document.querySelector('dialog:modal') !== null);
+    const check = () => setOpen(document.querySelector('dialog:modal:not(.sheet)') !== null);
     const observer = new MutationObserver(check);
     observer.observe(document.body, { subtree: true, attributeFilter: ['open'], childList: true });
     check();
@@ -150,7 +154,7 @@ const ToastItem = ({
  * announced with `ariaNotify()`, or a live region where that's missing.
  * Successes dismiss themselves after a few seconds, waiting while hovered or
  * focused; errors and notices stay until closed. Toasts wait while a modal
- * dialog is open, and those up when the editor goes back to Home are cleared.
+ * dialog (other than the key sheet) is open, and those up when the editor goes back to Home are cleared.
  */
 export const Toasts = () => {
   const toasts = useAtomValue(toastsAtom);

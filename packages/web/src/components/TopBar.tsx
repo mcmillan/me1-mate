@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
-import { Input, type TamaguiElement, YStack } from 'tamagui';
+import { Input, SizableText, type TamaguiElement, YStack } from 'tamagui';
+import { usePhone } from '../lib/layout.ts';
 import {
   canRedoAtom,
   canUndoAtom,
@@ -13,8 +14,10 @@ import {
 } from '../lib/store.ts';
 import { keyStyle } from '../lib/theme.ts';
 import { ExportMenu } from './ExportMenu.tsx';
+import { Menu, MenuItem } from './Menu.tsx';
 import { chooseFiles } from './OpenFiles.tsx';
 import { ProblemsButton } from './ProblemsButton.tsx';
+import { ScreenTabs } from './ScreenTabs.tsx';
 import { startTourAtom } from './Tour.tsx';
 import { Action } from './ui.tsx';
 import { Wordmark } from './Wordmark.tsx';
@@ -159,6 +162,21 @@ const CSS_TEXT = `
   .top-bar .top-export:focus-visible { outline-color: CanvasText; }
   .top-bar .top-export * { color: HighlightText; }
 }
+/*
+ * The phone layout's bar (\`.top-phone\`): one row of the config's name, then
+ * the problems and Export, then a menu with the rest; and under it the Keys |
+ * Channels switch. It stays where it is: the key screen doesn't scroll, and
+ * on the Channels screen the switch is wanted at hand.
+ */
+.top-phone .top-row { flex-wrap: nowrap; gap: 8px; min-block-size: 0; padding: 8px 12px 6px; }
+.top-phone .top-id { flex: 1 1 auto; gap: 8px; }
+.top-phone .top-name { min-inline-size: 7.5rem; }
+.top-phone .top-group { flex: none; gap: 6px; }
+.top-phone .top-help { margin-inline-start: 0; }
+.top-phone .top-switch { box-sizing: border-box; inline-size: 100%; padding: 0 12px 8px; }
+.top-phone .top-more { font-size: 1.375rem; letter-spacing: 0.04em; }
+.top-bar .top-menu-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
 @media (max-width: 719.98px) {
   @media (prefers-reduced-motion: no-preference) {
     .top-bar { transition: translate 150ms ease-out; }
@@ -167,6 +185,7 @@ const CSS_TEXT = `
     .top-bar:not(:focus-within) { translate: 0 -100%; }
   }
   .top-bar.top-away:not(:focus-within) { translate: 0 -100%; }
+  .top-bar.top-phone.top-phone:not(:focus-within) { translate: none; }
 }
 `;
 
@@ -393,12 +412,123 @@ const Separator = ({ wide }: { wide?: boolean }) => (
   <hr aria-orientation="vertical" className={wide ? 'top-sep top-sep-wide' : 'top-sep'} />
 );
 
+/** A command in the phone bar's menu: what it does, and on the right its shortcut or a hint. */
+const MoreItem = ({
+  label,
+  name,
+  disabled = false,
+  onSelect,
+}: {
+  readonly label: string;
+  /** The accessible name, where it says more than the words shown (the shortcut). */
+  readonly name?: string;
+  readonly disabled?: boolean;
+  readonly onSelect: () => void;
+}) => (
+  <MenuItem
+    disabled={disabled}
+    onSelect={onSelect}
+    px="3"
+    py="2"
+    {...(name ? { 'aria-label': name } : {})}
+  >
+    <SizableText size="sm" className="menu-text" opacity={disabled ? 0.45 : 1}>
+      {label}
+    </SizableText>
+  </MenuItem>
+);
+
+/**
+ * The phone layout's header: the config's name and whether it's unsaved;
+ * whether it can be exported, and Export; and a menu with everything else
+ * (undo and redo, open and new, the tour and the way home), so the bar stays
+ * calm. Under it, the switch between the Keys and Channels screens.
+ */
+const PhoneBar = () => {
+  const undo = useSetAtom(undoAtom);
+  const redo = useSetAtom(redoAtom);
+  const canUndo = useAtomValue(canUndoAtom);
+  const canRedo = useAtomValue(canRedoAtom);
+  const reset = useSetAtom(resetAtom);
+  const goHome = useSetAtom(goHomeAtom);
+  const startTour = useSetAtom(startTourAtom);
+  const [said, setSaid] = useState({ text: '', count: 0 });
+  const say = (text: string) => setSaid((last) => ({ text, count: last.count + 1 }));
+  return (
+    <YStack render="header" className="top-bar top-phone" position="sticky" t={0} z={10}>
+      <style>{CSS_TEXT}</style>
+      <h1 className="top-said">ME-1 Mate</h1>
+      <div className="top-row">
+        <div className="top-id">
+          <ConfigName />
+          <Unsaved />
+        </div>
+        {/* biome-ignore lint/a11y/useSemanticElements: a group of two buttons, not a form's fieldset */}
+        <div role="group" aria-label="Export" className="top-group">
+          <ProblemsButton />
+          <ExportMenu />
+        </div>
+        <span className="top-help">
+          <Menu
+            trigger={(props, open) => (
+              <Action
+                {...props}
+                kind="ghost"
+                className="target top-icon top-more"
+                px="0"
+                aria-label="More"
+                {...(open ? { bg: 'color-3' } : {})}
+              >
+                <span aria-hidden="true">⋯</span>
+              </Action>
+            )}
+            panel={{ w: 240 }}
+          >
+            <MoreItem
+              label="Undo"
+              name={UNDO}
+              disabled={!canUndo}
+              onSelect={() => {
+                undo();
+                say('Undone');
+              }}
+            />
+            <MoreItem
+              label="Redo"
+              name={REDO}
+              disabled={!canRedo}
+              onSelect={() => {
+                redo();
+                say('Redone');
+              }}
+            />
+            <MoreItem label="Open files" onSelect={chooseFiles} />
+            <MoreItem label="Start new" onSelect={() => reset()} />
+            <MoreItem label={TOUR} onSelect={() => startTour()} />
+            <MoreItem label={HOME} onSelect={() => goHome()} />
+          </Menu>
+        </span>
+      </div>
+      <div className="top-switch">
+        <ScreenTabs />
+      </div>
+      <p role="status" className="top-said">
+        {said.text}
+        {said.count % 2 === 1 ? '\u00a0' : ''}
+      </p>
+    </YStack>
+  );
+};
+
+/** The page's header: the phone layout's (`PhoneBar`), or the one-row bar of the one-page editor. */
+export const TopBar = () => (usePhone() ? <PhoneBar /> : <DesktopBar />);
+
 /**
  * The page's header. Left, what you're editing: the config's name and whether
  * it has unsaved changes. Right, a toolbar in three groups, in the order work
  * goes: history, files in, then whether it can go out and Export.
  */
-export const TopBar = () => {
+const DesktopBar = () => {
   const undo = useSetAtom(undoAtom);
   const redo = useSetAtom(redoAtom);
   const canUndo = useAtomValue(canUndoAtom);

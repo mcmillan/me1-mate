@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { type ReactNode, type RefObject, useEffect, useId, useRef } from 'react';
 import { Theme, useThemeName } from 'tamagui';
 import { Action } from './ui.tsx';
 
@@ -51,6 +51,30 @@ const outside = (e: PointerEvent, dialog: HTMLDialogElement) => {
 };
 
 /**
+ * Light dismiss for a modal `<dialog closedby="any">` where the browser has no
+ * `closedby` (Safari): a press and release both outside the dialog's box close it.
+ */
+export const useLightDismiss = (ref: RefObject<HTMLDialogElement | null>) => {
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog || 'closedBy' in HTMLDialogElement.prototype) return;
+    let pressedOutside = false;
+    const down = (e: PointerEvent) => {
+      pressedOutside = outside(e, dialog);
+    };
+    const up = (e: PointerEvent) => {
+      if (pressedOutside && outside(e, dialog)) dialog.close();
+    };
+    dialog.addEventListener('pointerdown', down);
+    dialog.addEventListener('pointerup', up);
+    return () => {
+      dialog.removeEventListener('pointerdown', down);
+      dialog.removeEventListener('pointerup', up);
+    };
+  }, [ref]);
+};
+
+/**
  * A modal confirmation for a destructive action, on a native `<dialog>`.
  * Escape, the back gesture, a backdrop click and Cancel all report `false`;
  * only the confirm button reports `true`. Cancel takes focus, so Enter is safe.
@@ -96,26 +120,10 @@ export const ConfirmDialog = ({
       onCloseRef.current(confirmed);
     };
     dialog.addEventListener('close', close);
-    // `closedby="any"` light-dismisses natively; elsewhere (Safari), close on
-    // a press and release both outside the box.
-    let pressedOutside = false;
-    const down = (e: PointerEvent) => {
-      pressedOutside = outside(e, dialog);
-    };
-    const up = (e: PointerEvent) => {
-      if (pressedOutside && outside(e, dialog)) dialog.close();
-    };
-    const fallback = !('closedBy' in HTMLDialogElement.prototype);
-    if (fallback) {
-      dialog.addEventListener('pointerdown', down);
-      dialog.addEventListener('pointerup', up);
-    }
-    return () => {
-      dialog.removeEventListener('close', close);
-      dialog.removeEventListener('pointerdown', down);
-      dialog.removeEventListener('pointerup', up);
-    };
+    return () => dialog.removeEventListener('close', close);
   }, []);
+  // `closedby="any"` light-dismisses natively; elsewhere (Safari), from script.
+  useLightDismiss(ref);
 
   return (
     <dialog

@@ -76,15 +76,25 @@ make sure every export is described and nothing described is gone.
   validation issues are derived atoms. Edits are pure functions in
   `lib/edit.ts`, applied through `editAtom`.
 - Two screens (`screenAtom`): Home (`Home.tsx`: ways to begin, how it
-  works, past sessions) and the editor. The editor is one page (`App.tsx`,
-  laid out by `.workspace` in `styles.css`): the key grid, the selected key's
-  inspector and the channel grid are always on screen together; don't add
-  views or tabs to it. Channels are assigned by picking: `pickChannel` in
-  `lib/edit.ts` is the one gesture, applied to `selectedKeyAtom`, and
-  `highlightKeyAtom` links a key and its channels on hover and focus. With
-  files loaded the editor must fit a 1280×720 window without scrolling; check
-  it when a panel grows. The tour (`Tour.tsx`) points at the regions by their
-  roles and wrapper classes; keep it true when they change.
+  works, past sessions) and the editor. From 700px wide the editor is one
+  page (`App.tsx`, laid out by `.workspace` in `styles.css`): the key grid,
+  the selected key's inspector and the channel grid are always on screen
+  together; don't add views or tabs to it. Below 700px (`PHONE_QUERY` in
+  `lib/layout.ts`) it is the phone layout, and that has exactly three
+  things: the key screen (the grid, all 16 keys without scrolling), the key
+  sheet (`KeySheet.tsx`: the inspector with the key's channel picker inside
+  it, on a native modal `<dialog>`, `keySheetOpenAtom`) and the Channels
+  screen (the channel grid for names and links, chosen with the top bar's
+  Keys | Channels tablist, `phoneScreenAtom`); add nothing else. Both layouts
+  place the same components (`variant` on `ChannelGrid`, `picker`/`onClose`
+  on `Inspector`, `onOpen` on `KeyGrid`); don't fork them. Channels are
+  assigned by picking: `pickChannel` in `lib/edit.ts` is the one gesture,
+  applied to `selectedKeyAtom`, and `highlightKeyAtom` links a key and its
+  channels on hover and focus. With files loaded the one-page editor must fit
+  a 1280×720 window without scrolling, and the phone's key screen its
+  window; check it when a panel grows. The tour (`Tour.tsx`) points at the
+  regions by their roles and wrapper classes, with its own targets for the
+  phone layout (`Step.phone`); keep both true when they change.
 - Look: the typeface is Allo (`public/fonts`, set in `styles.css`; tabular,
   disambiguated figures, no monospace). Weights come only from the
   `--w-text`/`--w-ui`/`--w-strong`/`--w-display`/`--w-black` variables in
@@ -98,7 +108,7 @@ make sure every export is described and nothing described is gone.
   and focus (always visible under `hover: none`). Component-specific CSS
   lives in a `<style>` block beside the component, with class names prefixed
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,
-  `sess-`, `tour-`, `wm-`).
+  `sess-`, `tour-`, `wm-`, `sheet`, `tabs-`).
 - Everything runs in the browser; nothing is uploaded.
 - It works offline after one visit. The service worker (`src/sw.js`, written
   into the build with its precache list by the plugin in `vite.config.ts`)
@@ -170,8 +180,8 @@ every push and pull request, and the Pages deploy waits for it, so a red suite
 never ships. When behaviour changes, change or add a case in the spec that
 covers it in the same change: `home`, `picks`, `files` (opening, editing,
 problems, byte-exact exports), `sessions`, `tour`, `layout` (sizes, schemes,
-target sizes, the 1280×720 fit), and `a11y` (axe in both schemes). Tag a test `@desktop` when it needs a wide window and `@touch` when
-it's about phones; don't skip one to go green. Find text fields with
+target sizes, the 1280×720 fit), and `a11y` (axe in both schemes). Tag a test `@desktop` when it needs a wide window (the one-page editor) and `@touch` when
+it's about phones (the phone layout's journeys are in `phone`); don't skip one to go green. Find text fields with
 `getByRole('textbox', …)`, not `getByLabel`: in Playwright's Firefox a
 `getByLabel` lookup followed by an axe scan crashes the page.
 
