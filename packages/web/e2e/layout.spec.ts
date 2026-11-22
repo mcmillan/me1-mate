@@ -108,3 +108,76 @@ for (const scheme of ['light', 'dark'] as const) {
     });
   });
 }
+
+/**
+ * Every slider is the same slider: the level and pan tracks of a key's
+ * fields, and of each group member, share their edges and their height, and
+ * each has its tick (0 dB on a level, the centre on a pan). Measured on the
+ * tracks, since the native range is only their hit area.
+ */
+const checkSliders = async (page: Page, open: (i: number) => Promise<void>) => {
+  const editor = editorOf(page);
+  const boxes = (selector: string) =>
+    page.evaluate(
+      (sel) =>
+        [...document.querySelectorAll<HTMLElement>(sel)]
+          .filter((el) => el.checkVisibility())
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            return { left: Math.round(r.left), right: Math.round(r.right), height: r.height };
+          }),
+      selector,
+    );
+
+  await editor.button('Try the example').click();
+  await expect(editor.keyGrid).toBeVisible();
+  await open(1);
+  const fields = await boxes('.insp-field .fader-groove');
+  expect(fields, 'a channel key has a level and a pan').toHaveLength(2);
+  expect(fields[1], 'its pan lines up with its level').toEqual(fields[0]);
+  await expect(
+    page.locator('.insp-field .fader-scale').filter({ visible: true }).first(),
+    'the level scale marks off, 0 and the top',
+  ).toHaveText('off0+9.6');
+  expect(
+    await page.locator('.insp-field .fader-tick').filter({ visible: true }).count(),
+    'both show their tick',
+  ).toBe(2);
+
+  await open(0);
+  const rows = page.locator('.insp-row').filter({ visible: true });
+  await expect(rows).toHaveCount(5);
+  const levels = await boxes('.insp-row-level .fader-groove');
+  const pans = await boxes('.insp-row-pan .fader-groove');
+  expect(levels).toHaveLength(5);
+  expect(pans, 'each row has its pan under its level, the same size').toEqual(levels);
+  for (const box of levels) expect(box, 'every row lines up').toEqual(levels[0]);
+  for (const x of await boxes('.insp-row .insp-remove')) {
+    expect(x.left, 'the way out keeps its own column').toBeGreaterThanOrEqual(
+      levels[0]?.right ?? 0,
+    );
+  }
+  await expect(
+    page.locator('.insp-members-head').filter({ visible: true }),
+    'one header names the column',
+  ).toHaveText('Level, with pan below');
+  await expect(rows.nth(4), 'a stereo pair says its pan is a balance').toContainText('Balance');
+};
+
+test('level and pan are one slider style, aligned in fields and group rows @desktop', async ({
+  page,
+}) => {
+  const editor = editorOf(page);
+  await checkSliders(page, (i) => editor.tiles.nth(i).click());
+});
+
+test('level and pan are one slider style, aligned in the key sheet @touch', async ({ page }) => {
+  const editor = editorOf(page);
+  await checkSliders(page, async (i) => {
+    if (await editor.sheet.isVisible()) {
+      await editor.sheet.getByRole('button', { name: 'Done' }).click();
+    }
+    await editor.tiles.nth(i).click();
+    await expect(editor.sheet).toBeVisible();
+  });
+});

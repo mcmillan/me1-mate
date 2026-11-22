@@ -76,7 +76,7 @@ const CSS = `
  * Text that is mostly figures (the eyebrow, the summary, channel numbers) is
  * set in plain ones: the page's slashed zero looks typewritten in small sizes.
  */
-.insp-eyebrow, .insp-sum, .insp-chip, .insp-row-num { font-feature-settings: "tnum"; }
+.insp-eyebrow, .insp-sum, .insp-chip, .insp-row-meta { font-feature-settings: "tnum"; }
 .insp-eyebrow {
   margin: 0; font-size: 0.6875rem; font-weight: var(--w-ui); line-height: 1.3; letter-spacing: 1px;
   text-transform: uppercase; color: var(--insp-quiet);
@@ -153,8 +153,7 @@ const CSS = `
 .insp .insp-seg:active { background: color-mix(in oklab, var(--ink) 14%, transparent); }
 .insp .insp-seg[aria-pressed="true"] { background: transparent; color: var(--canvas); }
 
-/* Mute, beside the level's label: an outlined pill; pressed, an ink one with the speaker crossed out. */
-.insp-level-head { align-items: center; }
+/* Mute, at the end of the level's head: an outlined pill; pressed, an ink one with the speaker crossed out. */
 .insp .insp-mute {
   block-size: max(28px, var(--target)); min-block-size: 0; gap: 5px; border-radius: 999px;
   background: transparent; color: var(--ink); opacity: 1;
@@ -206,31 +205,42 @@ const CSS = `
 .insp-copy { margin: 0; font-size: 0.875rem; font-weight: var(--w-text); line-height: 1.4; text-wrap: pretty; }
 
 /*
- * A group's channels, a row each: the name is the one thing in ink at rest
- * beside its level; the number is quiet, and the way out is faint until the
- * row is pointed at or holds focus (full strength where there is no hover).
- */
-/*
- * Each row is two lines on one grid: the name, the pair's second number, the
- * level fader with its readout, and the way out, in a column of its own so it
- * never covers the readout; then the pan under them, from the number's column.
- * Rows are parted by a hairline.
+ * A group's channels, a row each, on one grid so every row's columns line up:
+ * the channel (its name in ink, then its number and, for a stereo pair,
+ * "Balance", quieter), the sliders, and the way out in a column of its own so
+ * it never covers anything. The level is on the first line and the pan under
+ * it, in the same column: the two tracks share both edges, and each value
+ * slot is the same fixed width at the end. A header names the column once.
+ * Rows are parted by a hairline; the way out is faint until the row is
+ * pointed at or holds focus (full strength where there is no hover).
  */
 .insp-members { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none; }
-.insp-row { --insp-row-x: max(24px, var(--target)); padding-block: 4px 6px; }
-.insp-row + .insp-row { border-block-start: 1px solid var(--line); }
-.insp-row-main, .insp-row-pan {
-  display: grid; grid-template-columns: 56px 40px minmax(0, 1fr) var(--insp-row-x); align-items: center; column-gap: 6px;
+.insp-members-head, .insp-row {
+  --insp-row-x: max(24px, var(--target));
+  display: grid; grid-template-columns: 72px minmax(0, 1fr) var(--insp-row-x); column-gap: 6px;
 }
-.insp-row-main { min-block-size: max(32px, var(--target)); }
-.insp-row-pan > .insp-row-num { grid-column: 1; }
-.insp-row-pan > .fader-root { grid-column: 2 / 4; }
+.insp-members-head { margin-block-end: -2px; }
+.insp-members-head > .insp-hint { grid-column: 2; }
+.insp-row {
+  grid-template-areas: "name level x" "meta pan ." "error error error";
+  align-items: center; padding-block: 4px 6px;
+}
+.insp-row + .insp-row { border-block-start: 1px solid var(--line); }
+.insp-row > .insp-row-name { grid-area: name; }
+.insp-row > .insp-row-meta { grid-area: meta; }
+.insp-row > .insp-row-level { grid-area: level; }
+.insp-row > .insp-row-pan { grid-area: pan; }
+.insp-row > .insp-remove { grid-area: x; }
+.insp-row > .insp-row-error { grid-area: error; }
 .insp-row-name {
   font-size: 0.84375rem; font-weight: var(--w-ui); line-height: 1.2;
   white-space: nowrap; overflow-x: clip; text-overflow: ellipsis;
 }
 .insp-row-name[data-none] { color: var(--muted); }
-.insp-row-num { font-size: 0.75rem; font-weight: var(--w-text); line-height: 1.2; color: var(--muted); white-space: nowrap; }
+.insp-row-meta {
+  display: flex; flex-wrap: wrap; column-gap: 5px; min-inline-size: 0;
+  font-size: 0.75rem; font-weight: var(--w-text); line-height: 1.2; color: var(--muted); white-space: nowrap;
+}
 .insp .insp-remove {
   inline-size: max(24px, var(--target)); block-size: max(24px, var(--target)); min-block-size: 0;
   border-radius: 999px; background: transparent; color: var(--muted); opacity: 1;
@@ -794,19 +804,16 @@ const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
   const master = key.type === 'group';
   return (
     <div className="insp-field">
-      <div className="insp-field-head insp-level-head">
-        <span className="insp-label">{master ? 'Master level' : 'Level'}</span>
-        <MuteToggle index={index} muted={key.muted === true} />
-      </div>
-      <div data-issue-path={path}>
-        <Fader
-          value={key.level}
-          onChange={(level, { merge }) =>
-            edit((s) => setKeyLevel(s, index, level), merge ? path : undefined)
-          }
-          label={`Key ${index + 1} ${master ? 'master level' : 'level'}`}
-        />
-      </div>
+      <Fader
+        title={<span className="insp-label">{master ? 'Master level' : 'Level'}</span>}
+        aside={<MuteToggle index={index} muted={key.muted === true} />}
+        issuePath={path}
+        value={key.level}
+        onChange={(level, { merge }) =>
+          edit((s) => setKeyLevel(s, index, level), merge ? path : undefined)
+        }
+        label={`Key ${index + 1} ${master ? 'master level' : 'level'}`}
+      />
       <FieldError path={path} />
     </div>
   );
@@ -815,6 +822,7 @@ const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
 /**
  * A channel or Aux Input key's pan, called Balance where the key plays a
  * stereo pair or the Aux Input (the ME-1's pan control is a balance there).
+ * It is laid out as the level field above it, so the two tracks line up.
  */
 const PanField = ({ index, keyValue: key }: { index: number; keyValue: Key }) => {
   const system = useAtomValue(systemAtom);
@@ -823,17 +831,18 @@ const PanField = ({ index, keyValue: key }: { index: number; keyValue: Key }) =>
   const path = `keys[${index}].pan`;
   const balance = isBalance(system, key);
   return (
-    <Field label={balance ? 'Balance' : 'Pan'} error={<FieldError path={path} />}>
-      <div data-issue-path={path}>
-        <Pan
-          value={key.pan}
-          onChange={(pan, { merge }) =>
-            edit((s) => setKeyPan(s, index, pan), merge ? path : undefined)
-          }
-          label={`Key ${index + 1} ${balance ? 'balance' : 'pan'}`}
-        />
-      </div>
-    </Field>
+    <div className="insp-field">
+      <Pan
+        title={<span className="insp-label">{balance ? 'Balance' : 'Pan'}</span>}
+        issuePath={path}
+        value={key.pan}
+        onChange={(pan, { merge }) =>
+          edit((s) => setKeyPan(s, index, pan), merge ? path : undefined)
+        }
+        label={`Key ${index + 1} ${balance ? 'balance' : 'pan'}`}
+      />
+      <FieldError path={path} />
+    </div>
   );
 };
 
@@ -930,7 +939,6 @@ const PlaysGroup = ({
           Channels
           {members.length > 0 && <small>{` · ${members.length}`}</small>}
         </Sub>
-        {members.length > 0 && <Hint>Level and pan in the group</Hint>}
       </div>
       {members.length > 0 && where !== 'below' && (
         <p className="insp-hint insp-cue-line" data-cue="">
@@ -959,17 +967,22 @@ const PlaysGroup = ({
           )}
         </div>
       ) : (
-        // biome-ignore lint/a11y/noRedundantRoles: Safari drops the list role from a list without markers
-        <ul className="insp-members" role="list">
-          {members.map((m, j) => {
-            const name = system.channels[m.channel - 1]?.name;
-            const numbers = numbersOf(system, m.channel);
-            const spoken = spokenName(system, m.channel);
-            const stereo = isStereo(system, pickTarget(system, m.channel));
-            const path = `keys[${index}].members[${j}]`;
-            return (
-              <li key={m.channel} className="insp-row" data-issue-path={path}>
-                <div className="insp-row-main">
+        <>
+          <div className="insp-members-head" aria-hidden="true">
+            <span className="insp-hint">Level, with pan below</span>
+          </div>
+          {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops the list role from a list without markers */}
+          <ul className="insp-members" role="list">
+            {members.map((m, j) => {
+              const name = system.channels[m.channel - 1]?.name;
+              const numbers = numbersOf(system, m.channel);
+              const spoken = spokenName(system, m.channel);
+              const stereo = isStereo(system, pickTarget(system, m.channel));
+              const path = `keys[${index}].members[${j}]`;
+              // An unnamed channel's number is its name; only a pair's second number is left to add.
+              const more = name ? numbers : numbers.slice(String(m.channel).length);
+              return (
+                <li key={m.channel} className="insp-row" data-issue-path={path}>
                   <span className="insp-sr">{spoken}</span>
                   <span
                     className="insp-row-name"
@@ -978,13 +991,14 @@ const PlaysGroup = ({
                   >
                     {name || `Ch ${m.channel}`}
                   </span>
-                  {/* An unnamed channel's number is its name; only a pair's second number is left to add. */}
-                  <span className="insp-row-num" aria-hidden="true">
-                    {name ? numbers : numbers.slice(String(m.channel).length)}
+                  <span className="insp-row-meta" aria-hidden="true">
+                    {more && <span>{more}</span>}
+                    {stereo && <span>Balance</span>}
                   </span>
-                  <div data-issue-path={`${path}.level`}>
+                  <div className="insp-row-level">
                     <Fader
-                      compact
+                      variant="row"
+                      issuePath={`${path}.level`}
                       value={m.level}
                       onChange={(level, { merge }) =>
                         edit(
@@ -993,6 +1007,20 @@ const PlaysGroup = ({
                         )
                       }
                       label={`${spoken} level in key ${n}`}
+                    />
+                  </div>
+                  <div className="insp-row-pan">
+                    <Pan
+                      variant="row"
+                      issuePath={`${path}.pan`}
+                      value={m.pan}
+                      onChange={(pan, { merge }) =>
+                        edit(
+                          (s) => setMemberPan(s, index, m.channel, pan),
+                          merge ? `${path}.pan` : undefined,
+                        )
+                      }
+                      label={`${spoken} ${stereo ? 'balance' : 'pan'} in key ${n}`}
                     />
                   </div>
                   <Action
@@ -1009,27 +1037,14 @@ const PlaysGroup = ({
                   >
                     <span aria-hidden="true">✕</span>
                   </Action>
-                </div>
-                <div className="insp-row-pan" data-issue-path={`${path}.pan`}>
-                  <span className="insp-row-num" aria-hidden="true">
-                    {stereo ? 'Balance' : 'Pan'}
-                  </span>
-                  <Pan
-                    value={m.pan}
-                    onChange={(pan, { merge }) =>
-                      edit(
-                        (s) => setMemberPan(s, index, m.channel, pan),
-                        merge ? `${path}.pan` : undefined,
-                      )
-                    }
-                    label={`${spoken} ${stereo ? 'balance' : 'pan'} in key ${n}`}
-                  />
-                </div>
-                <FieldError path={path} />
-              </li>
-            );
-          })}
-        </ul>
+                  <div className="insp-row-error">
+                    <FieldError path={path} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );
