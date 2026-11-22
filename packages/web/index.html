@@ -10,26 +10,40 @@
     />
     <meta name="color-scheme" content="light dark" />
     <!-- Browser chrome follows the page: `--canvas` in src/styles.css. -->
-    <meta name="theme-color" content="#f4f2f6" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#151417" media="(prefers-color-scheme: dark)" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23b5542a%27/%3E%3Cpath d=%27M9 22V10M16 22V14M23 22V8%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27/%3E%3C/svg%3E" />
+    <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%271%27 y=%271%27 width=%2714%27 height=%2714%27 rx=%274.5%27 fill=%27%23ff6fa3%27/%3E%3Crect x=%2717%27 y=%271%27 width=%2714%27 height=%2714%27 rx=%274.5%27 fill=%27%23ffb000%27/%3E%3Crect x=%271%27 y=%2717%27 width=%2714%27 height=%2714%27 rx=%274.5%27 fill=%27%2300c2a8%27/%3E%3Crect x=%2717%27 y=%2717%27 width=%2714%27 height=%2714%27 rx=%274.5%27 fill=%27%234d9bff%27/%3E%3C/svg%3E" />
+    <!-- The one typeface, Allo (SIL Open Font License; see fonts/Allo-OFL.txt). -->
+    <link
+      rel="preload"
+      href="%BASE_URL%fonts/AlloVariable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <!--
-      Critical CSS: paint the theme's background before the script runs, so
-      there's no flash of the wrong colour. Keep in step with `--canvas` in
-      src/styles.css and the stock Tamagui `color` of the light and dark themes.
+      Critical CSS: the typeface, and the page's background and text colour
+      before the script runs, so there's no flash of the wrong colour. Keep in
+      step with `--canvas` and `--ink` in src/styles.css.
     -->
     <style>
+      @font-face {
+        font-family: Allo;
+        src: url("%BASE_URL%fonts/AlloVariable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
       :root {
         color-scheme: light dark;
-        --page-bg: #f4f2f6;
-        --page-fg: #1c1b1e;
+        --page-bg: #fbfaf8;
+        --page-fg: #131316;
         background-color: var(--page-bg);
         color: var(--page-fg);
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --page-bg: #151417;
-          --page-fg: #faf9fb;
+          --page-bg: #101012;
+          --page-fg: #f6f5f2;
         }
       }
     </style>

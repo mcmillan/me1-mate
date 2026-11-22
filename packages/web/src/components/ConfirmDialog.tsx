@@ -1,19 +1,48 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react';
-import { SizableText, Theme, XStack, YStack } from 'tamagui';
+import { Theme, useThemeName } from 'tamagui';
 import { Action } from './ui.tsx';
 
 /**
  * The native modal gives the inert page, focus containment, Esc and focus
  * return. Tamagui's reset unsets the UA styles on `dialog`, so this restores
  * the closed state and the centred modal box, dims the backdrop and keeps
- * scrolling from chaining to the page behind.
+ * scrolling from chaining to the page behind. The box is a raised card; it
+ * pops in where motion is welcome (`@starting-style` gives the first frame).
  */
 const CSS = `
 .confirm-dialog:not([open]) { display: none; }
-.confirm-dialog[open] { display: block; padding: 0; border: 0; background: transparent; color: inherit; }
-.confirm-dialog:modal { position: fixed; inset: 0; margin: auto; width: fit-content; height: fit-content; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; }
-.confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.45); overflow: hidden; overscroll-behavior: contain; }
+.confirm-dialog[open] { display: block; box-sizing: border-box; padding: 22px; border: 1.5px solid var(--line); border-radius: 24px; background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.confirm-dialog:modal { position: fixed; inset: 0; margin: auto; width: min(420px, calc(100vw - 32px)); height: fit-content; max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; }
+.confirm-dialog::backdrop { background: rgb(19 19 22 / 0.45); overflow: hidden; overscroll-behavior: contain; }
+@media (prefers-color-scheme: dark) {
+  .confirm-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+}
+.confirm-title { margin: 0; font-size: 1.375rem; font-weight: var(--w-display); line-height: 1.2; text-wrap: balance; }
+.confirm-message { display: block; margin: 6px 0 0; font-size: 0.875rem; font-weight: var(--w-text); line-height: 1.45; overflow-wrap: break-word; text-wrap: pretty; }
+.confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-block-start: 20px; }
+.confirm-actions button { min-block-size: max(38px, var(--target)); }
+@media (prefers-reduced-motion: no-preference) {
+  .confirm-dialog[open] { transition: opacity 150ms ease-out, scale 300ms var(--spring); }
+  .confirm-dialog[open]::backdrop { transition: opacity 150ms ease-out; }
+  @starting-style {
+    .confirm-dialog[open] { opacity: 0; scale: 0.94; }
+    .confirm-dialog[open]::backdrop { opacity: 0; }
+  }
+  .confirm-actions button { transition: scale 200ms var(--spring), background-color 120ms ease-out, border-color 120ms ease-out; }
+  .confirm-actions button:active { scale: 0.96; }
+}
 `;
+
+/**
+ * The red pill: the red theme's primary `Action`, in the red the warning signs
+ * use, with text that reads on it in each colour scheme. Spread it onto an
+ * `Action kind="primary"` inside the red theme.
+ */
+export const useRedPill = () => {
+  const dark = useThemeName().startsWith('dark');
+  const fill = { default: 'color-7', hover: 'color-8', press: 'color-8' } as const;
+  return { bg: fill, borderColor: fill, color: dark ? 'color-1' : '#fff' } as const;
+};
 
 /** Outside the dialog's box: the pointer, not the target, since padding also targets the dialog. */
 const outside = (e: PointerEvent, dialog: HTMLDialogElement) => {
@@ -43,6 +72,7 @@ export const ConfirmDialog = ({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const id = useId();
+  const redPill = useRedPill();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -97,38 +127,22 @@ export const ConfirmDialog = ({
     >
       <style>{CSS}</style>
       <form method="dialog">
-        <YStack
-          w={400}
-          maxW="100%"
-          gap="3"
-          p="4"
-          rounded="lg"
-          borderWidth={1}
-          borderColor="border-color"
-          bg="background"
-          shadowColor="rgba(0,0,0,0.2)"
-          shadowRadius={24}
-          shadowOffset={{ width: 0, height: 8 }}
-        >
-          <YStack gap="1">
-            <SizableText id={`${id}-title`} size="base" fontWeight="600" render="h2" m="0">
-              {title}
-            </SizableText>
-            <SizableText id={`${id}-message`} size="sm" color="color-11">
-              {children}
-            </SizableText>
-          </YStack>
-          <XStack gap="2" justify="flex-end" flexWrap="wrap">
-            <Action kind="subtle" type="submit" value="cancel">
-              Cancel
+        <h2 id={`${id}-title`} className="display confirm-title">
+          {title}
+        </h2>
+        <p id={`${id}-message`} className="confirm-message">
+          {children}
+        </p>
+        <div className="confirm-actions">
+          <Action kind="subtle" px="4" type="submit" value="cancel">
+            Cancel
+          </Action>
+          <Theme name="red">
+            <Action kind="primary" px="4" type="submit" value="confirm" {...redPill}>
+              {confirmLabel}
             </Action>
-            <Theme name="red">
-              <Action kind="primary" type="submit" value="confirm">
-                {confirmLabel}
-              </Action>
-            </Theme>
-          </XStack>
-        </YStack>
+          </Theme>
+        </div>
       </form>
     </dialog>
   );

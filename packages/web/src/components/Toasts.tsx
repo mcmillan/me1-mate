@@ -1,11 +1,11 @@
 import { useAtomValue, useSetAtom } from 'jotai';
 import { type FocusEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { SizableText, XStack, YStack } from 'tamagui';
 import { dismissToastAtom, type Toast, toastsAtom } from '../lib/store.ts';
+import { keyStyle } from '../lib/theme.ts';
 import { Action } from './ui.tsx';
 
-const TONE_THEME = { success: 'green', error: 'red', info: null } as const;
-const TONE_GLYPH = { success: '✓', error: '!', info: 'i' } as const;
+/** The mark that leads each toast, so its tone isn't colour alone. */
+const TONE_MARK = { success: '✓', error: '⚠', info: '●' } as const;
 /**
  * How long a toast stays up, or `null` to stay until dismissed. Successes
  * ("Loaded…", "Saved…") are frequent and also shown elsewhere in the UI, so
@@ -20,19 +20,53 @@ const supportsPopover =
  * The container is a manual popover, so it sits in the top layer above any
  * dialog or menu opened before it, and nothing light-dismisses it. Without
  * popover support it stays a fixed, z-indexed box (the `:popover-open` rules
- * are dropped). Entry and exit fade, and slide in, unless less motion is asked.
+ * are dropped). Its padding is the toasts' distance from the window's edges,
+ * inside the box so their shadows aren't clipped. Entry and exit fade; a
+ * toast also slides in where motion is welcome.
+ *
+ * A toast is an ink pill, the page's colours the other way round, so its
+ * marks are picked for ink: a key's green for done, a key's blue for a note
+ * (both deepened where ink is the light colour), and for a problem the red
+ * theme's red from the other colour scheme. The dismiss button turns back to
+ * the page's colours when focused, so the focus ring has the canvas to show
+ * against.
  */
 const CSS = `
-.toasts { position: fixed; inset: auto 16px 16px 16px; width: auto; height: auto; max-height: calc(100dvh - 32px); overflow-y: auto; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; opacity: 1; }
-@media (min-width: 768px) { .toasts { left: 24px; right: auto; bottom: 24px; align-items: flex-start; } }
+.toasts { position: fixed; inset: auto 0 0 0; width: auto; height: auto; max-height: 100dvh; overflow-y: auto; margin: 0; padding: 16px; border: 0; background: transparent; color: inherit; z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; opacity: 1; }
+@media (min-width: 768px) { .toasts { right: auto; padding: 24px; align-items: flex-start; } }
 .toasts[popover] { transition: opacity 160ms ease-out, display 160ms, overlay 160ms; transition-behavior: allow-discrete; }
 .toasts[popover]:not(:popover-open) { display: none; opacity: 0; }
 @starting-style { .toasts[popover]:popover-open { opacity: 0; } }
-.toast { transition: opacity 160ms ease-out, translate 160ms ease-out; }
-@starting-style { .toast { opacity: 0; translate: 0 8px; } }
-@media (prefers-reduced-motion: reduce) { .toasts[popover], .toast { transition: none; } }
+.toast { box-sizing: border-box; display: flex; align-items: center; gap: 10px; max-inline-size: min(100%, 440px); min-block-size: 46px; padding: 4px 5px 4px 16px; border: 1.5px solid transparent; border-radius: 23px; background: var(--ink); color: var(--canvas); box-shadow: var(--shadow); pointer-events: auto; transition: opacity 160ms ease-out; }
+@starting-style { .toast { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .toast { transition: opacity 160ms ease-out, translate 300ms var(--spring); }
+  @starting-style { .toast { translate: 0 12px; } }
+}
+.toast-mark { flex: none; font-size: 1rem; font-weight: var(--w-display); line-height: 1; }
+.toast-mark-success { color: var(--k); }
+.toast-mark-info { color: var(--k); font-size: 0.625rem; }
+.toast-mark-error { color: #ff6467; }
+@media (prefers-color-scheme: dark) {
+  .toast-mark-success, .toast-mark-info { color: color-mix(in oklab, var(--k) 60%, black); }
+  .toast-mark-error { color: #e7000b; }
+}
+.toast-text { flex: 1; min-inline-size: 0; padding-block: 6px; font-size: 0.875rem; font-weight: var(--w-strong); line-height: 1.3; overflow-wrap: break-word; }
+.toast button { min-inline-size: max(34px, var(--target)); min-block-size: max(34px, var(--target)); }
+.toast button.toast-x:focus-visible { background: var(--canvas); outline-offset: 0; }
+.toast button.toast-x:focus-visible * { color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .toast button { transition: scale 200ms var(--spring), background-color 120ms ease-out; }
+  .toast button:active { scale: 0.9; }
+}
+@media (forced-colors: active) {
+  .toast { border-color: CanvasText; }
+}
 .toasts-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 `;
+
+/** The key whose colour marks each tone; an error's red is set in the CSS. */
+const TONE_KEY = { success: 11, info: 3, error: undefined } as const;
 
 type AriaNotify = (announcement: string) => void;
 
@@ -75,52 +109,37 @@ const ToastItem = ({
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
   };
 
+  const key = TONE_KEY[toast.tone];
   return (
-    <XStack
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover and focus only pause the countdown
+    <div
       className="toast"
       data-toast-id={toast.id}
-      theme={TONE_THEME[toast.tone]}
-      items="center"
-      gap="2.5"
-      w={360}
-      maxW="100%"
-      pl="3"
-      pr="1"
-      py="1.5"
-      rounded="lg"
-      borderWidth={1}
-      borderColor="color-6"
-      bg="color-2"
-      shadowColor="rgba(0,0,0,0.16)"
-      shadowRadius={14}
-      shadowOffset={{ width: 0, height: 4 }}
-      pointerEvents="auto"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={onBlur}
     >
-      <YStack
-        w={20}
-        h={20}
-        rounded="full"
-        bg={toast.tone === 'info' ? 'color-8' : 'color-9'}
-        items="center"
-        justify="center"
-        shrink={0}
-        aria-hidden
+      <span
+        className={`toast-mark toast-mark-${toast.tone}`}
+        style={key === undefined ? undefined : keyStyle(key)}
+        aria-hidden="true"
       >
-        <SizableText size="xs" fontWeight="800" color="background">
-          {TONE_GLYPH[toast.tone]}
-        </SizableText>
-      </YStack>
-      <SizableText size="sm" color="color" flex={1} minW={0}>
-        {toast.message}
-      </SizableText>
-      <Action kind="ghost" aria-label="Dismiss notification" onPress={() => onDismiss(toast.id)}>
+        {TONE_MARK[toast.tone]}
+      </span>
+      <span className="toast-text">{toast.message}</span>
+      <Action
+        kind="ghost"
+        className="toast-x"
+        px="0"
+        color="background"
+        bg={{ default: 'transparent', hover: 'color-10', press: 'color-10' }}
+        aria-label="Dismiss notification"
+        onPress={() => onDismiss(toast.id)}
+      >
         ✕
       </Action>
-    </XStack>
+    </div>
   );
 };
 

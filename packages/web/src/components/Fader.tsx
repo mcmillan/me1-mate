@@ -8,8 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Input, SizableText, XStack, YStack } from 'tamagui';
-import { DISPLAY_FONT } from '../lib/theme.ts';
+import { Input } from 'tamagui';
 
 export interface FaderProps {
   readonly value: Level | undefined;
@@ -21,7 +20,7 @@ export interface FaderProps {
   readonly onChange: (level: Level, how: { readonly merge: boolean }) => void;
   /** Accessible name, e.g. "Key 3 level". */
   readonly label: string;
-  /** A lower track without tick labels or a unit, for group member rows. */
+  /** A thinner track and a smaller thumb, without the scale, the 0 dB notch or a unit, for group member rows. */
   readonly compact?: boolean;
 }
 
@@ -99,16 +98,18 @@ const stepped = (level: Level, step: number): Level => {
   return clamp(grid);
 };
 
+/**
+ * The marks under the full-size fader: its two ends, and 0 dB under the notch
+ * in the track. The readout says the rest.
+ */
 const TICKS: readonly (readonly [db: Level, label: string])[] = [
   ['off', 'off'],
-  [-40, '-40'],
-  [-20, '-20'],
-  [-10, '-10'],
   [0, '0'],
   [LEVEL_MAX, '+10'],
 ];
 
-const THUMB_W = 12;
+/** The thumb's diameter in px: the pointer handling needs it, and the CSS takes it from here. */
+const THUMB = { full: 22, compact: 12 } as const;
 
 /** The native range's integer steps across the travel; positions map onto these. */
 const STEPS = 1000;
@@ -117,73 +118,157 @@ const stepOf = (level: Level) => Math.round(levelPosition(level) * STEPS);
 
 /**
  * The native range keeps its semantics, focus and pointer handling; only its
- * track and thumb are restyled (the groove, fill and ticks are drawn behind it).
- * It is as tall as a press target (`--target`: taller for fingers) and centred
- * on the drawn track. WebKit and Firefox pseudo-elements stay in separate
- * rules, since a browser drops a whole rule over a pseudo-element it doesn't
- * know.
+ * track and thumb are restyled. The thick track, its fill and the 0 dB notch
+ * are drawn behind it: the fill wears the key's colour (`--k`, set by
+ * whatever the fader sits in) and is ink where there is none. The thumb is a
+ * round ink knob with a halo of the surface colour, so it reads on the fill.
  *
- * The focus ring is drawn on the track (`.fader-track::after`), not on the
- * range: the range is as tall as a finger needs, so its own outline would cut
- * through the scale under it.
+ * The range is as wide as the track, so the thumb's centre travels from half
+ * a thumb inside one end to half a thumb inside the other; the fill, the
+ * notch and the scale are placed on that same travel. It is as tall as a
+ * press target (`--target`: taller for fingers).
  *
- * In forced colours author backgrounds and shadows go, so the groove, the fill,
- * the ticks and the thumb are given system colours there.
+ * WebKit and Firefox pseudo-elements stay in separate rules, since a browser
+ * drops a whole rule over a pseudo-element it doesn't know.
+ *
+ * The focus ring is drawn around the whole track (`.fader-track::after`),
+ * clear of the thumb and its halo; the scale starts below it.
+ *
+ * Tamagui's own border and padding classes repeat themselves up to four
+ * times; `&&&&` matches that where the readout sets them.
+ *
+ * In forced colours author backgrounds and shadows go, so the track, the fill,
+ * the notch and the thumb are given system colours there.
  */
 const CSS = `
-.fader-travel {
-  --fader-hit: max(var(--fader-track-h), var(--target, 24px));
-  --fader-ink: var(--color-10);
-  --fader-thumb: var(--panel, var(--color-1));
+.fader-root {
+  --fader-thumb: ${THUMB.full}px; --fader-groove: 10px; --fader-halo: 3px;
+  --fader-fill: var(--k, var(--ink));
+  --fader-hit: max(calc(var(--fader-thumb) + 2 * var(--fader-halo)), var(--target, 24px));
+  --fader-span: calc(100% - var(--fader-thumb));
+  display: flex; align-items: flex-start; gap: 10px; inline-size: 100%;
 }
-.fader-groove { background: var(--well, var(--color-3)); box-shadow: inset 0 0 0 1px var(--color-6); }
+.fader-root[data-compact] {
+  --fader-thumb: ${THUMB.compact}px; --fader-groove: 4px; --fader-halo: 2px;
+  align-items: center; gap: 6px;
+}
+.fader-travel { flex: 1 1 0; min-inline-size: 120px; }
+.fader-root[data-compact] .fader-travel { min-inline-size: 72px; }
+.fader-track { position: relative; block-size: var(--fader-hit); }
+.fader-groove, .fader-fill, .fader-zero {
+  position: absolute; inset-block-start: calc(50% - var(--fader-groove) / 2);
+  block-size: var(--fader-groove); border-radius: 999px; pointer-events: none;
+}
+/* A well with a hairline edge, so the travel still to go shows on the card in both schemes. */
+.fader-groove { inset-inline: 0; background: var(--well); box-shadow: inset 0 0 0 1.5px var(--line); }
+.fader-fill {
+  inset-inline-start: 0; background: var(--fader-fill);
+  inline-size: calc(var(--fader-thumb) / 2 + var(--fader-at) * var(--fader-span));
+}
+/* Where 0 dB is, on the full-size fader: a notch in the track that shows through the fill as well. */
+.fader-zero {
+  inset-inline-start: calc(var(--fader-thumb) / 2 + var(--fader-zero-at) * var(--fader-span) - 1px);
+  inline-size: 2px; background: color-mix(in oklab, var(--ink) 34%, transparent);
+}
 .fader {
   -webkit-appearance: none; appearance: none; position: absolute;
-  top: 50%; translate: 0 -50%; left: ${-THUMB_W / 2}px;
-  width: calc(100% + ${THUMB_W}px); height: var(--fader-hit);
-  margin: 0; padding: 0; border: 0; border-radius: 6px; background: transparent;
+  inset-block-start: 0; inset-inline: 0; inline-size: 100%; block-size: var(--fader-hit);
+  margin: 0; padding: 0; border: 0; border-radius: 999px; background: transparent;
   cursor: pointer; touch-action: pan-y;
 }
 .fader:focus-visible { outline: none; }
 .fader-track::after {
-  content: ""; position: absolute; inset: 0 ${-(THUMB_W / 2 + 1)}px; border-radius: 6px;
-  pointer-events: none;
+  content: ""; position: absolute; border-radius: 999px; pointer-events: none;
+  inset-block: calc((var(--fader-hit) - var(--fader-thumb)) / 2 - var(--fader-halo) - 1px);
+  inset-inline: -4px;
 }
-.fader-track:has(> .fader:focus-visible)::after { outline: 2px solid var(--focus, var(--color-9)); }
-.fader:hover { --fader-thumb: var(--color-3); }
-.fader:active { --fader-thumb: var(--color-5); }
-.fader::-webkit-slider-runnable-track { height: 100%; border: 0; background: transparent; }
+.fader-track:has(> .fader:focus-visible)::after { outline: 3px solid var(--focus); }
+.fader::-webkit-slider-runnable-track { block-size: 100%; border: 0; background: transparent; }
 .fader::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none; box-sizing: border-box;
-  width: ${THUMB_W}px; height: var(--fader-thumb-h);
-  margin-top: calc((var(--fader-hit) - var(--fader-thumb-h)) / 2);
-  border: 1.5px solid var(--fader-ink); border-radius: 4px;
-  background: var(--fader-thumb); box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  inline-size: var(--fader-thumb); block-size: var(--fader-thumb);
+  margin-block-start: calc((var(--fader-hit) - var(--fader-thumb)) / 2);
+  border: 0; border-radius: 50%; background: var(--ink);
+  box-shadow: 0 0 0 var(--fader-halo) var(--card);
 }
-.fader::-moz-range-track { height: 100%; border: 0; background: transparent; }
+.fader::-moz-range-track { block-size: 100%; border: 0; background: transparent; }
 .fader::-moz-range-thumb {
-  box-sizing: border-box; width: ${THUMB_W}px; height: var(--fader-thumb-h);
-  border: 1.5px solid var(--fader-ink); border-radius: 4px;
-  background: var(--fader-thumb); box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  box-sizing: border-box; inline-size: var(--fader-thumb); block-size: var(--fader-thumb);
+  border: 0; border-radius: 50%; background: var(--ink);
+  box-shadow: 0 0 0 var(--fader-halo) var(--card);
 }
-.fader-readout { inline-size: calc(6ch + 14px); }
-.fader-readout.fader-readout:focus-visible { outline: 2px solid var(--focus, var(--color-9)); outline-offset: 2px; }
+
+/*
+ * The scale: one quiet row, each mark centred on its place in the travel, the
+ * ends flush with the track's. Figures here and in the readout are tabular
+ * but plain: the page's slashed zero looks typewritten at this size.
+ */
+.fader-scale, .fader-root .fader-readout { font-feature-settings: "tnum"; }
+.fader-scale {
+  display: grid; margin-block-start: 3px; margin-inline: calc(var(--fader-thumb) / 2);
+  font-size: 0.6875rem; font-weight: var(--w-text); line-height: 1.2; color: var(--muted);
+  user-select: none; -webkit-user-select: none;
+}
+.fader-mark {
+  grid-area: 1 / 1; justify-self: start; white-space: nowrap;
+  margin-inline-start: calc(var(--fader-mark-at) * 100%); translate: -50% 0;
+}
+.fader-mark:dir(rtl) { translate: 50% 0; }
+.fader-mark:first-child { translate: calc(var(--fader-thumb) / -2) 0; }
+.fader-mark:last-child { translate: calc(var(--fader-thumb) / 2 - 100%) 0; }
+.fader-mark:first-child:dir(rtl) { translate: calc(var(--fader-thumb) / 2) 0; }
+.fader-mark:last-child:dir(rtl) { translate: calc(100% - var(--fader-thumb) / 2) 0; }
+
+/* The level, typed: a number that shows it's a field when pointed at or focused. */
+.fader-out { display: flex; align-items: center; gap: 7px; flex: none; min-block-size: var(--fader-hit); }
+.fader-root .fader-readout {
+  inline-size: calc(6ch + 12px); block-size: max(28px, var(--target, 24px)); min-block-size: 0;
+  border-radius: 10px; background: transparent; color: var(--ink);
+  font-size: 0.875rem; font-weight: var(--w-ui); line-height: 1.2; text-align: end;
+  &&&& { padding: 0 3px 0 5px; border: 1.5px solid transparent; }
+  &&&&:hover { border-color: var(--line); }
+}
+.fader-root .fader-readout:hover { background: var(--well); }
+.fader-root .fader-readout:focus { background: var(--well); }
+.fader-root .fader-readout:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.fader-root[data-compact] .fader-readout { font-size: 0.8125rem; block-size: max(24px, var(--target, 24px)); }
+.fader-unit { font-size: 0.75rem; font-weight: var(--w-text); color: var(--muted); }
+
+/* The thumb grows under the pointer and again while it's held; where motion is reduced it gains a ring instead. */
 @media (prefers-reduced-motion: no-preference) {
-  .fader::-webkit-slider-thumb { transition: background-color 120ms ease-out; }
-  .fader::-moz-range-thumb { transition: background-color 120ms ease-out; }
+  .fader-fill { transition: background-color 240ms ease-out; }
+  .fader-readout { transition: background-color 120ms ease-out, border-color 120ms ease-out; }
+  .fader::-webkit-slider-thumb { transition: scale 160ms ease-out; }
+  .fader::-moz-range-thumb { transition: scale 160ms ease-out; }
+  .fader:hover::-webkit-slider-thumb { scale: 1.12; }
+  .fader:active::-webkit-slider-thumb { scale: 1.24; }
+  .fader:hover::-moz-range-thumb { scale: 1.12; }
+  .fader:active::-moz-range-thumb { scale: 1.24; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fader:hover::-webkit-slider-thumb { box-shadow: 0 0 0 var(--fader-halo) var(--card), 0 0 0 calc(var(--fader-halo) + 2px) var(--muted); }
+  .fader:active::-webkit-slider-thumb { box-shadow: 0 0 0 var(--fader-halo) var(--card), 0 0 0 calc(var(--fader-halo) + 2px) var(--ink); }
+  .fader:hover::-moz-range-thumb { box-shadow: 0 0 0 var(--fader-halo) var(--card), 0 0 0 calc(var(--fader-halo) + 2px) var(--muted); }
+  .fader:active::-moz-range-thumb { box-shadow: 0 0 0 var(--fader-halo) var(--card), 0 0 0 calc(var(--fader-halo) + 2px) var(--ink); }
+}
+@media (prefers-contrast: more) {
+  .fader-groove { box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .fader-root .fader-readout { &&&& { border-color: var(--muted); } }
 }
 @media (forced-colors: active) {
-  .fader-travel .fader-groove { background: Canvas; border: 1px solid CanvasText; }
-  .fader-travel .fader-fill { background: Highlight; }
-  .fader-travel .fader-tick { background: CanvasText; }
-  .fader::-webkit-slider-thumb { border-color: ButtonText; background: ButtonFace; }
-  .fader::-moz-range-thumb { border-color: ButtonText; background: ButtonFace; }
+  .fader-groove { background: Canvas; border: 1px solid CanvasText; }
+  .fader-fill { background: Highlight; }
+  .fader-zero { background: CanvasText; }
+  .fader::-webkit-slider-thumb { background: ButtonText; border: 2px solid Canvas; }
+  .fader::-moz-range-thumb { background: ButtonText; border: 2px solid Canvas; }
+  .fader-track:has(> .fader:focus-visible)::after { outline-color: Highlight; }
 }
 `;
 
 /**
  * A horizontal level fader: off at the far left, the 0 marker, +10 dB at the
- * right, on a law that gives -40…+10 dB most of the travel. It is a native
+ * right, on a law that gives -40…+10 dB most of the travel. Its fill is the
+ * colour of the key it sits in (`--k`), or ink outside one. It is a native
  * range input over integer steps of the travel: drag or click the track, use
  * the arrow keys (0.5 dB, 3 dB with Shift or Page Up/Down; Home is off, End
  * +10, 0 the marker), or type into the readout, whose value is selected when
@@ -193,6 +278,7 @@ const CSS = `
  */
 export const Fader = ({ value, onChange, label, compact = false }: FaderProps) => {
   const level: Level = value ?? 0;
+  const thumb = compact ? THUMB.compact : THUMB.full;
   const input = useRef<HTMLInputElement>(null);
   /** The pointer press in progress; `armed` once it has really moved the fader. */
   const press = useRef<{ startX: number; armed: boolean } | null>(null);
@@ -227,8 +313,8 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
     if (e.button !== 0) return;
     const el = e.currentTarget;
     const rect = el.getBoundingClientRect();
-    const thumbX = rect.left + THUMB_W / 2 + (stepOf(level) / STEPS) * (rect.width - THUMB_W);
-    const onThumb = Math.abs(e.clientX - thumbX) <= THUMB_W / 2 + 2;
+    const thumbX = rect.left + thumb / 2 + (stepOf(level) / STEPS) * (rect.width - thumb);
+    const onThumb = Math.abs(e.clientX - thumbX) <= thumb / 2 + 2;
     if (onThumb && e.timeStamp - lastThumbDown.current < 400) {
       // A double-click on the thumb snaps to 0.
       lastThumbDown.current = 0;
@@ -332,68 +418,25 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
   // does, so typing replaces the level; a press once it has focus places the caret.
   const selectOnClick = useRef(false);
 
-  const position = levelPosition(shown);
-  const trackH = compact ? 22 : 26;
-  const thumbH = compact ? 18 : 22;
-  const groove = 4;
-
   return (
-    <XStack items="center" gap="2" w="100%">
-      <YStack
-        className="fader-travel"
-        flex={1}
-        minW={compact ? 72 : 120}
-        px={THUMB_W / 2}
-        style={
-          { '--fader-track-h': `${trackH}px`, '--fader-thumb-h': `${thumbH}px` } as CSSProperties
-        }
-      >
-        <style href="fader" precedence="default">
-          {CSS}
-        </style>
-        <YStack className="fader-track" position="relative" h={trackH}>
-          {/* Groove, with the travel left of the thumb filled in. */}
-          <YStack
-            className="fader-groove"
-            position="absolute"
-            l={0}
-            r={0}
-            t={(trackH - groove) / 2}
-            h={groove}
-            rounded="full"
-            pointerEvents="none"
-          />
-          <YStack
-            className="fader-fill"
-            position="absolute"
-            l={0}
-            t={(trackH - groove) / 2}
-            h={groove}
-            w={`${position * 100}%`}
-            rounded="full"
-            bg="color-9"
-            pointerEvents="none"
-          />
-          {TICKS.map(([db]) => {
-            const nominal = db === 0;
-            // In a list of faders only the 0 marker earns its ink.
-            if (compact && !nominal) return null;
-            return (
-              <YStack
-                key={String(db)}
-                className="fader-tick"
-                position="absolute"
-                l={`${levelPosition(db) * 100}%`}
-                ml={nominal ? -1 : -0.5}
-                t={nominal ? 2 : (trackH - groove) / 2 - 3}
-                h={nominal ? trackH - 4 : groove + 6}
-                w={nominal ? 2 : 1}
-                rounded="full"
-                bg={nominal ? 'color-10' : 'color-7'}
-                pointerEvents="none"
-              />
-            );
-          })}
+    <div
+      className="fader-root"
+      data-compact={compact ? '' : undefined}
+      style={
+        {
+          '--fader-at': levelPosition(shown),
+          '--fader-zero-at': levelPosition(0),
+        } as CSSProperties
+      }
+    >
+      <style href="fader" precedence="default">
+        {CSS}
+      </style>
+      <div className="fader-travel">
+        <div className="fader-track">
+          <span className="fader-groove" />
+          <span className="fader-fill" />
+          {compact ? null : <span className="fader-zero" />}
           <input
             ref={input}
             type="range"
@@ -411,38 +454,24 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
             onInput={onInput}
             onKeyDown={onKeyDown}
           />
-        </YStack>
+        </div>
         {compact ? null : (
-          <YStack position="relative" h={16} mt={3} aria-hidden>
+          <div className="fader-scale" aria-hidden="true">
             {TICKS.map(([db, tick]) => (
-              <SizableText
+              <span
                 key={tick}
-                position="absolute"
-                l={`${levelPosition(db) * 100}%`}
-                w={32}
-                ml={db === 'off' ? -THUMB_W / 2 : db === LEVEL_MAX ? -32 + THUMB_W / 2 : -16}
-                text={db === 'off' ? 'left' : db === LEVEL_MAX ? 'right' : 'center'}
-                size="xs"
-                color={db === 0 ? 'color' : 'color-8'}
-                fontWeight={db === 0 ? '700' : '400'}
-                fontFamily={DISPLAY_FONT}
-                select="none"
+                className="fader-mark"
+                style={{ '--fader-mark-at': levelPosition(db) } as CSSProperties}
               >
                 {tick}
-              </SizableText>
+              </span>
             ))}
-          </YStack>
+          </div>
         )}
-      </YStack>
-      <XStack items="center" gap="1" self={compact ? 'center' : 'flex-start'} shrink={0}>
+      </div>
+      <div className="fader-out">
         <Input
           className="fader-readout target"
-          size="sm"
-          h={compact ? 28 : 30}
-          px="1.5"
-          text="right"
-          fontFamily={DISPLAY_FONT}
-          fontWeight="600"
           autoComplete="off"
           enterKeyHint="done"
           aria-label={`${label} in dB`}
@@ -472,11 +501,11 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
           }}
         />
         {compact ? null : (
-          <SizableText size="xs" color="color-8" aria-hidden>
+          <span className="fader-unit" aria-hidden="true">
             dB
-          </SizableText>
+          </span>
         )}
-      </XStack>
-    </XStack>
+      </div>
+    </div>
   );
 };

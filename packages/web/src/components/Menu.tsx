@@ -27,12 +27,18 @@ const NATIVE_ANCHORS = CSS.supports('position-area: block-end');
 const ITEM_ROLE = NATIVE_FOCUSGROUP ? undefined : ('menuitem' as const);
 
 const MENU = '[popover]:has(> [focusgroup~="menu"])';
+/*
+ * The panel is a raised card. The menu fades in and drops a few pixels from
+ * its trigger, and back; `@starting-style` gives the opening its first frame,
+ * and `display` and `overlay` keep the menu drawn until the closing ends.
+ */
 const CSS_TEXT = `
 ${MENU} { border: 0; padding: 0; background: transparent; color: inherit; overflow: visible; }
+${MENU}:not(:popover-open) { display: none; }
 @supports (position-area: block-end) {
   ${MENU} {
     inset: auto;
-    margin: 6px 0;
+    margin: 8px 0;
     position-area: block-end span-inline-end;
     position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
   }
@@ -40,9 +46,31 @@ ${MENU} { border: 0; padding: 0; background: transparent; color: inherit; overfl
 @supports not (position-area: block-end) {
   ${MENU} { position: fixed; inset: auto; margin: 0; }
 }
+@media (prefers-reduced-motion: no-preference) {
+  ${MENU} {
+    opacity: 0;
+    translate: 0 -0.25rem;
+    transition: opacity, translate, display, overlay;
+    transition-duration: 0.15s;
+    transition-behavior: allow-discrete;
+  }
+  ${MENU}:popover-open {
+    opacity: 1;
+    translate: 0 0;
+    transition-duration: 0.1s;
+    @starting-style { opacity: 0; translate: 0 -0.25rem; }
+  }
+}
+.menu-panel { box-sizing: border-box; border: 1.5px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: var(--shadow); }
+.menu-item { min-block-size: max(36px, var(--target)); }
+.menu-item:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+/* The weights of a menu's text, for items to use: what it does, a name in it, and a hint. */
+.menu-panel .menu-text { font-weight: var(--w-ui); }
+.menu-panel .menu-name { font-weight: var(--w-strong); }
+.menu-panel .menu-hint { font-weight: var(--w-text); }
 `;
 
-const GAP = 6;
+const GAP = 8;
 const EDGE = 8;
 
 /** Without anchor positioning: below the trigger, flipped and clamped to the viewport. */
@@ -237,17 +265,11 @@ export const Menu = ({ trigger, panel, children }: MenuProps) => {
       {...({ focusgroup: 'menu nomemory' } as Record<string, string>)}
       {...(NATIVE_FOCUSGROUP ? {} : { role: 'menu' as const })}
       aria-labelledby={triggerId}
+      className="menu-panel"
       w={340}
       maxW="calc(100vw - 32px)"
       p="1.5"
-      gap="1"
-      rounded="lg"
-      bg="background"
-      borderWidth={1}
-      borderColor="border-color"
-      shadowColor="rgba(0,0,0,0.18)"
-      shadowRadius={16}
-      shadowOffset={{ width: 0, height: 6 }}
+      gap="0.5"
       {...panel}
     >
       {children}
@@ -282,16 +304,19 @@ export const MenuItem = ({ disabled = false, onSelect, children, ...props }: Men
       {...({ type: 'button' } as Record<string, string>)}
       {...(ITEM_ROLE ? { role: ITEM_ROLE } : {})}
       aria-disabled={disabled || undefined}
+      className="menu-item"
       items="stretch"
+      justify="center"
       text="left"
       borderWidth={0}
-      rounded="md"
+      // The panel's corner, less its padding.
+      rounded={14}
       cursor={disabled ? 'not-allowed' : 'pointer'}
-      bg={disabled ? 'transparent' : { default: 'transparent', hover: 'color-2', focus: 'color-2' }}
-      outlineColor="color-8"
-      outlineStyle={{ default: 'none', 'focus-visible': 'solid' }}
-      outlineWidth={2}
-      outlineOffset={-2}
+      bg={
+        disabled
+          ? 'transparent'
+          : { default: 'transparent', hover: 'color-2', focus: 'color-2', press: 'color-3' }
+      }
       onClick={(e: MouseEvent) => {
         if (disabled) return;
         close(e.detail !== 0);

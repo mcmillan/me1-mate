@@ -7,19 +7,11 @@ export interface FieldErrorProps {
   readonly path: string;
 }
 
-/** A small warning sign, drawn in the current text colour. */
-export const WarningIcon = ({ size = 14 }: { readonly size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-    <path
-      d="M8 1.5 15 14H1L8 1.5Z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-    <path d="M8 6v3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <circle cx="8" cy="11.75" r="0.9" fill="currentColor" />
-  </svg>
+/** Allo's warning sign, in the current text colour; `size` is its font size, the text's by default. */
+export const WarningIcon = ({ size }: { readonly size?: number }) => (
+  <span aria-hidden="true" style={size === undefined ? undefined : { fontSize: size }}>
+    ⚠
+  </span>
 );
 
 /*
@@ -70,13 +62,13 @@ const withdraw = (owner: string) => {
   announcedFor = undefined;
 };
 
-/** The message under a field; the icon reads as "Error" so the text isn't colour alone. */
+/** The message under a field, in red; the sign reads as "Error" so it isn't colour alone. */
 const ErrorText = ({ id, message }: { id?: string; message: string }) => (
-  <XStack theme="red" items="flex-start" gap="1.5" pt="1" {...(id ? { id } : {})}>
-    <SizableText size="xs" color="color-7" pt="0.5" shrink={0} role="img" aria-label="Error">
+  <XStack theme="red" items="baseline" gap="1.5" pt="1" {...(id ? { id } : {})}>
+    <SizableText size="xs" color="color-7" shrink={0} role="img" aria-label="Error">
       <WarningIcon />
     </SizableText>
-    <SizableText size="xs" color="color">
+    <SizableText size="xs" fontWeight="500" color="color">
       {message}
     </SizableText>
   </XStack>

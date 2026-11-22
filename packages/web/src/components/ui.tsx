@@ -3,31 +3,30 @@
  * actions look the same everywhere.
  */
 
-import type { Key } from '@mcmillan/2me2u-core';
 import type { ComponentProps } from 'react';
-import { Button, SizableText, styled, Theme, YStack } from 'tamagui';
-import { KEY_TYPE_THEME } from '../lib/theme.ts';
+import { Button, SizableText, styled, YStack } from 'tamagui';
 
 /**
- * A button. `primary` is the one main action in a region (wrap it in
- * `<Theme name={ACCENT}>` for the accent colour); `subtle` is a secondary
- * action; `ghost` is a toolbar or inline action with no chrome until hovered.
+ * A button, pill-shaped. `primary` is the one main action in a region, in
+ * ink; `subtle` is a secondary action with an outline; `ghost` is a toolbar
+ * or inline action with no chrome until hovered. In the red theme a primary
+ * button is the destructive one.
  */
 export const Action = styled(Button, {
   size: 'sm',
-  rounded: 'md',
-  borderWidth: 1,
+  rounded: 'full',
+  borderWidth: 1.5,
   cursor: 'pointer',
+  fontWeight: '600',
   variants: {
     kind: {
       primary: {
-        bg: { default: 'color-8', hover: 'color-9', press: 'color-10' },
-        borderColor: { default: 'color-8', hover: 'color-9', press: 'color-10' },
-        // `color-1`, not `background`: on the orange and red themes `background` is a tint.
-        color: 'color-1',
+        bg: { default: 'color', hover: 'color-10', press: 'color-10' },
+        borderColor: { default: 'color', hover: 'color-10', press: 'color-10' },
+        color: 'background',
       },
       subtle: {
-        bg: { default: 'color-2', hover: 'color-3', press: 'color-4' },
+        bg: { default: 'transparent', hover: 'color-2', press: 'color-3' },
         borderColor: 'border-color',
         color: 'color',
       },
@@ -45,44 +44,24 @@ export const Action = styled(Button, {
 });
 
 /**
- * A section of the page: a raised surface (`.panel` in styles.css) with its
- * own heading. Pass `render="section"` and an `aria-label` or
- * `aria-labelledby`.
+ * A region of the page, laid straight on the canvas with its own heading.
+ * Pass `render="section"` and an `aria-label` or `aria-labelledby`.
  */
-export const Panel = ({ className, ...props }: ComponentProps<typeof YStack>) => (
-  <YStack
-    className={className ? `panel ${className}` : 'panel'}
-    gap="3"
-    p="4"
-    rounded="xl"
-    borderWidth={1}
-    {...props}
-  />
+export const Panel = (props: ComponentProps<typeof YStack>) => <YStack gap="2.5" {...props} />;
+
+/** A raised surface (`.card` in styles.css): the inspector. */
+export const Card = ({ className, ...props }: ComponentProps<typeof YStack>) => (
+  <YStack className={className ? `card ${className}` : 'card'} rounded={24} {...props} />
 );
 
-/** A panel's heading: small capitals, so the content below it leads. */
+/** A region's heading: big, heavy and fully round, the page's display voice. */
 export const PanelTitle = styled(SizableText, {
   render: 'h2',
-  size: 'xs',
+  className: 'display',
+  size: 'xl',
+  // 22px on the `xl` line height; a number for `lineHeight` would be read as a size token.
+  fontSize: 22,
   fontWeight: '700',
-  letterSpacing: 1.2,
-  textTransform: 'uppercase',
-  color: 'color-8',
+  color: 'color',
   m: '0',
 });
-
-/** A dot in a key type's colour; nothing for an unassigned key. */
-export const TypeDot = ({ type, size = 8 }: { type: Key['type']; size?: number }) =>
-  type === 'unassigned' ? null : (
-    <Theme name={KEY_TYPE_THEME[type]}>
-      <YStack
-        className="type-dot"
-        w={size}
-        h={size}
-        rounded="full"
-        bg="color-9"
-        shrink={0}
-        aria-hidden
-      />
-    </Theme>
-  );

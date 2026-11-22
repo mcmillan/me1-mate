@@ -10,7 +10,6 @@ import {
   meuAtom,
   toastAtom,
 } from '../lib/store.ts';
-import { ACCENT, DISPLAY_FONT } from '../lib/theme.ts';
 import { Menu, MenuItem } from './Menu.tsx';
 import { useJumpToIssue } from './ProblemsButton.tsx';
 import { Action } from './ui.tsx';
@@ -40,58 +39,33 @@ const Row = ({ title, file, hint, disabled, reason, describedBy, onSelect }: Row
       px="3"
       py="2.5"
     >
-      {/* The file name keeps its place at the end of the first line; a long title wraps beside it. */}
-      <XStack items="baseline" justify="space-between" gap="3" opacity={disabled ? 0.5 : 1}>
-        <SizableText size="sm" fontWeight="600" minW={0}>
+      {/* The file name ends the first line, or takes a line of its own in a narrow menu. */}
+      <XStack
+        flexWrap="wrap"
+        items="baseline"
+        justify="space-between"
+        columnGap="3"
+        opacity={disabled ? 0.45 : 1}
+      >
+        <SizableText size="sm" className="menu-text">
           {title}
         </SizableText>
-        <SizableText
-          size="xs"
-          fontFamily={DISPLAY_FONT}
-          color="color-11"
-          shrink={0}
-          whiteSpace="nowrap"
-        >
+        <SizableText size="sm" className="menu-name" shrink={0} whiteSpace="nowrap">
           {file}
         </SizableText>
       </XStack>
-      <SizableText size="xs" color="color-10" opacity={disabled ? 0.5 : 1}>
+      <SizableText size="xs" className="menu-hint" color="color-8" opacity={disabled ? 0.6 : 1}>
         {hint}
       </SizableText>
       {reason && (
-        <SizableText size="xs" fontWeight="600" color="color-11">
+        <SizableText size="xs" className="menu-text" theme="red" color="color-7">
+          <span aria-hidden="true">⚠ </span>
           {reason}
         </SizableText>
       )}
     </MenuItem>
   );
 };
-
-const GoIcon = () => (
-  <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-    <path
-      d="M3 8h9.5M8.5 4l4 4-4 4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const ChevronIcon = () => (
-  <svg width={12} height={12} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-    <path
-      d="M2.5 4.5 6 8l3.5-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 /**
  * Export button and menu for the .ME1 and .meu. While problems block the
@@ -128,50 +102,43 @@ export const ExportMenu = () => {
         trigger={(props, open) => (
           <Action
             {...props}
-            theme={ACCENT}
             kind="primary"
             // `.top-export` (TopBar.tsx) keeps it the primary button in forced colours.
             className="target top-export"
-            px="3"
+            px={18}
             {...(open ? { bg: 'color-10', borderColor: 'color-10' } : {})}
           >
             <XStack items="center" gap="1.5">
-              <SizableText size="sm" fontWeight="600" color="color-1">
+              <SizableText size="sm" className="top-label" color="background">
                 Export
               </SizableText>
-              <SizableText size="sm" color="color-1" aria-hidden>
-                <ChevronIcon />
+              <SizableText size="sm" color="background" aria-hidden>
+                <span className="top-arrow">↓</span>
               </SizableText>
             </XStack>
           </Action>
         )}
-        panel={{ w: 364 }}
+        panel={{ w: 380 }}
       >
         {/* Why nothing can be exported, and the way to the (first) problem. */}
         {blocked && firstIssue && (
-          <Theme name="red">
-            <MenuItem
-              id={noteId}
-              onSelect={() => jump(firstIssue)}
-              px="3"
-              py="2"
-              gap="0.5"
-              bg={{ default: 'color-2', hover: 'color-3', focus: 'color-3' }}
-            >
-              <XStack items="center" justify="space-between" gap="3">
-                <SizableText size="sm" fontWeight="700" color="color-11">
+          <MenuItem id={noteId} onSelect={() => jump(firstIssue)} px="3" py="2.5" gap="0.5">
+            <Theme name="red">
+              <XStack items="baseline" justify="space-between" gap="3">
+                <SizableText size="sm" className="menu-name" color="color-7">
+                  <span aria-hidden="true">⚠ </span>
                   {blocked}
                 </SizableText>
-                <SizableText size="sm" color="color-11" shrink={0}>
-                  <GoIcon />
+                <SizableText size="sm" className="menu-name" color="color-7" shrink={0} aria-hidden>
+                  →
                 </SizableText>
               </XStack>
-              <SizableText size="xs" color="color-11">
-                The ME-1 wouldn’t accept it.{' '}
-                {issues.length === 1 ? 'Go to the problem.' : 'Go to the first one.'}
-              </SizableText>
-            </MenuItem>
-          </Theme>
+            </Theme>
+            <SizableText size="xs" className="menu-hint" color="color-8">
+              The ME-1 wouldn’t accept it.{' '}
+              {issues.length === 1 ? 'Go to the problem.' : 'Go to the first one.'}
+            </SizableText>
+          </MenuItem>
         )}
         <Row
           title="Config for the ME-1"

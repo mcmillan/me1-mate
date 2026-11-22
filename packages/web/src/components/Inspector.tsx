@@ -1,12 +1,21 @@
 import type { Key } from '@mcmillan/2me2u-core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { Input, SizableText, type TamaguiElement, Theme, XStack, YStack } from 'tamagui';
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import { Input, SizableText, type TamaguiElement, Theme, XStack } from 'tamagui';
 import {
   type Editable,
   type EditableKeyType,
   isStereo,
   keyLabel,
+  levelText,
   pairStart,
   setKeyLevel,
   setKeyName,
@@ -15,38 +24,192 @@ import {
   toggleMember,
 } from '../lib/edit.ts';
 import { editAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
-import { DISPLAY_FONT, KEY_TYPE_THEME } from '../lib/theme.ts';
+import { KEY_TYPE_LABEL, keyStyle } from '../lib/theme.ts';
 import { Fader } from './Fader.tsx';
 import { FieldError, useTextFieldError, WarningIcon } from './FieldError.tsx';
-import { Action, Panel, PanelTitle, TypeDot } from './ui.tsx';
+import { Action, Card } from './ui.tsx';
 
 /**
- * The panel is a size container: in the side column it is one column; where it
- * sits full width between the keys and the channels it puts what the key is on
- * the left and what it plays on the right. The areas are named, so the order
- * in the markup is the reading and Tab order in both layouts.
+ * The inspector is the page's one raised surface, a card. Its top is the hero:
+ * a block of the selected key's colour (`--k`, set on the card, so the faders
+ * inside wear it too) with the key's label in the big voice.
+ *
+ * The card is a size container: in the side column the body is one column;
+ * where it sits full width between the keys and the channels it puts what the
+ * key is on the left and what it plays on the right. The areas are named, so
+ * the order in the markup is the reading and Tab order in both layouts.
+ *
+ * Tamagui's own border and padding classes repeat themselves up to four
+ * times; `&&&&` matches that where an Action or Input is restyled here.
  */
 const CSS = `
-.insp { container: insp / inline-size; }
-/* The steps are taller than the title; pulled in, the header is the title's height, like the other panels'. */
-.insp-steps { margin-block: -6px; }
-.insp-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-.insp-body > * { min-inline-size: 0; }
-.insp-well { background: var(--well); }
-.insp-empty { background: var(--well); border: 1px dashed var(--panel-border); }
-.insp-row + .insp-row { border-block-start: 1px solid var(--panel-border); }
-.insp-seg { flex: 1 1 auto; }
-.insp .insp-type .insp-seg[aria-pressed="true"] {
-  background: var(--panel); border-color: var(--panel-border); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
-}
-/* The fader draws its own ring (Fader.tsx). */
-.insp :is(button, input:not(.fader), [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* A field with a problem: the red theme's color-7, as the icon under it. */
-.insp .insp-fields input[aria-invalid="true"] { border-color: var(--c-color-red-600); }
-@media (prefers-color-scheme: dark) {
-  .insp .insp-fields input[aria-invalid="true"] { border-color: var(--c-color-red-400); }
+.insp { container: insp / inline-size; position: relative; overflow: hidden; }
+/* A hero without a colour covers the card's hairline, so it's drawn again on top. */
+.insp:has(> .insp-hero[data-plain])::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1.5px var(--line);
 }
 .insp-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* The fader draws its own ring (Fader.tsx). */
+.insp :is(button, input:not(.fader), [tabindex]):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---- hero ---- */
+.insp-hero {
+  display: grid; gap: 2px; padding: 14px 18px 16px;
+  --insp-on: var(--on-key); --insp-quiet: color-mix(in oklab, var(--insp-on) 80%, transparent);
+  background: var(--k); color: var(--insp-on);
+}
+/* An empty key has no colour, and neither does one this editor only keeps. */
+/* (Its quiet text is ink thinned the same way: --muted is a little too light to read on --well.) */
+.insp-hero[data-plain] {
+  --insp-on: var(--ink); --insp-quiet: color-mix(in oklab, var(--ink) 72%, transparent); background: var(--well);
+}
+.insp-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-block-size: 20px; }
+/*
+ * Text that is mostly figures (the eyebrow, the summary, channel numbers) is
+ * set in plain ones: the page's slashed zero looks typewritten in small sizes.
+ */
+.insp-eyebrow, .insp-sum, .insp-chip, .insp-row-num { font-feature-settings: "tnum"; }
+.insp-eyebrow {
+  margin: 0; font-size: 0.6875rem; font-weight: var(--w-ui); line-height: 1.3; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--insp-quiet);
+}
+/* Pulled out so two round buttons don't make the top row taller than its text. */
+.insp-steps { display: flex; gap: 4px; margin-block: -6px; margin-inline-end: -6px; }
+.insp .insp-step {
+  inline-size: max(28px, var(--target)); block-size: max(28px, var(--target)); min-block-size: 0;
+  border-radius: 999px; color: var(--insp-on); opacity: 1;
+  background: color-mix(in oklab, currentColor 10%, transparent);
+  &&&& { padding: 0; border: 0; }
+}
+.insp .insp-step:hover { background: color-mix(in oklab, currentColor 20%, transparent); }
+.insp .insp-step:active { background: color-mix(in oklab, currentColor 28%, transparent); }
+/* At either end: an outline where the button was, not faded as a whole, so its focus ring stays at full strength. */
+.insp .insp-step[aria-disabled="true"] {
+  background: transparent; color: color-mix(in oklab, var(--insp-on) 36%, transparent); cursor: not-allowed;
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--insp-on) 18%, transparent);
+}
+/* On a key's colour the ring gets a band of the card's colour inside it, so it shows on any of them. */
+.insp .insp-step:focus-visible { box-shadow: 0 0 0 2px var(--card); }
+/* The label, as big as the card allows: six wide letters still fit the narrowest card. */
+.insp-big {
+  margin: 0; font-size: clamp(1.75rem, 13.2cqi, 2.75rem); font-weight: var(--w-display); line-height: 1.08;
+  letter-spacing: -0.027em; white-space: nowrap; overflow-x: clip; text-overflow: ellipsis;
+}
+.insp-big[data-long] { font-size: clamp(1.5rem, 9.6cqi, 2.25rem); }
+.insp-big[data-standin] { color: color-mix(in oklab, currentColor 58%, transparent); }
+.insp-hero[data-plain] .insp-big:is([data-standin], [data-empty]) { color: var(--muted); }
+.insp-sum { margin: 0; font-size: 0.8125rem; font-weight: var(--w-text); line-height: 1.35; color: var(--insp-quiet); }
+
+/* ---- body ---- */
+.insp-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 14px 18px 18px; }
+.insp-body > * { min-inline-size: 0; }
+.insp-fields, .insp-plays { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; }
+.insp-fields { gap: 12px; }
+.insp-plays { gap: 6px; }
+.insp-plays .insp-make { justify-self: start; margin-block-start: 6px; }
+
+/* The type switch: a pill of four on a well; the pressed one is an ink pill that slides between them. */
+.insp-type {
+  position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+  padding: 4px; border-radius: 999px; background: var(--well);
+}
+.insp-pill {
+  position: absolute; inset-block: 4px; inset-inline-start: 4px; inline-size: calc((100% - 20px) / 4);
+  border-radius: 999px; background: var(--ink); pointer-events: none;
+  translate: calc(var(--insp-at) * (100% + 4px)) 0;
+}
+.insp-pill:dir(rtl) { translate: calc(var(--insp-at) * (-100% - 4px)) 0; }
+.insp-pill[data-off] { opacity: 0; }
+.insp .insp-seg {
+  position: relative; min-inline-size: 0; block-size: max(30px, var(--target)); min-block-size: 0;
+  border-radius: 999px; background: transparent; color: var(--ink); opacity: 1;
+  font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1.2;
+  &&&& { padding: 0 2px; border: 0; }
+}
+.insp .insp-seg:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.insp .insp-seg:active { background: color-mix(in oklab, var(--ink) 14%, transparent); }
+.insp .insp-seg[aria-pressed="true"] { background: transparent; color: var(--canvas); }
+
+/* A field: a small quiet label, a quieter hint on the same row, the control, then its problem. */
+.insp-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
+.insp-field-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 8px; }
+.insp-label { margin: 0; font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1.35; color: var(--muted); }
+.insp-label small { font-size: inherit; font-weight: var(--w-text); }
+.insp-hint { margin: 0; font-size: 0.75rem; font-weight: var(--w-text); line-height: 1.35; color: var(--muted); }
+.insp .insp-input {
+  block-size: auto; min-block-size: max(40px, var(--target)); border-radius: 12px; background: transparent;
+  color: var(--ink); font-size: 1.0625rem; font-weight: var(--w-ui); line-height: 1.3;
+  &&&& { padding: 6px 12px; border: 1.5px solid var(--line); }
+  &&&&:hover { border-color: color-mix(in oklab, var(--ink) 28%, var(--line)); }
+  /* A field with a problem: the red theme's colour, as the icon under it. */
+  &&&&[aria-invalid="true"] { border-color: var(--c-color-red-600); }
+}
+.insp .insp-input::placeholder { color: var(--muted); opacity: 0.6; font-weight: var(--w-text); }
+@media (prefers-color-scheme: dark) {
+  .insp .insp-input { &&&&[aria-invalid="true"] { border-color: var(--c-color-red-400); } }
+}
+
+/* What a channel key plays: the channel's chip, as in Channels, and its name, on a tint of the key's colour. */
+.insp-chan {
+  display: flex; align-items: center; gap: 8px; min-block-size: 38px; padding: 4px; padding-inline-end: 14px;
+  border-radius: 999px; background: color-mix(in oklab, var(--k) 20%, var(--card));
+}
+.insp-chip {
+  flex: none; display: grid; place-items: center; min-inline-size: 30px; min-block-size: 30px; padding-inline: 8px;
+  border-radius: 999px; background: var(--k); color: var(--on-key);
+  font-size: 0.8125rem; font-weight: var(--w-strong); line-height: 1;
+}
+.insp-chan-name {
+  flex: 1 1 0; min-inline-size: 0; font-size: 0.9375rem; font-weight: var(--w-ui); line-height: 1.3;
+  white-space: nowrap; overflow-x: clip; text-overflow: ellipsis;
+}
+.insp-chan-name[data-none] { font-weight: var(--w-text); color: var(--muted); }
+.insp-copy { margin: 0; font-size: 0.875rem; font-weight: var(--w-text); line-height: 1.4; text-wrap: pretty; }
+
+/*
+ * A group's channels, a row each: the name is the one thing in ink at rest
+ * beside its level; the number is quiet, and the way out shows when the row
+ * is pointed at or holds focus (always, where there is no hover).
+ */
+.insp-members { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none; }
+.insp-row-main {
+  display: grid; grid-template-columns: 56px 40px minmax(0, 1fr) auto; align-items: center; column-gap: 6px;
+  min-block-size: max(36px, var(--target));
+}
+.insp-row-name {
+  font-size: 0.84375rem; font-weight: var(--w-ui); line-height: 1.2;
+  white-space: nowrap; overflow-x: clip; text-overflow: ellipsis;
+}
+.insp-row-name[data-none] { color: var(--muted); }
+.insp-row-num { font-size: 0.75rem; font-weight: var(--w-text); line-height: 1.2; color: var(--muted); white-space: nowrap; }
+.insp .insp-remove {
+  inline-size: max(24px, var(--target)); block-size: max(24px, var(--target)); min-block-size: 0;
+  margin-inline: -2px -6px; border-radius: 999px; background: transparent; color: var(--muted); opacity: 1;
+  font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1;
+  &&&& { padding: 0; border: 0; }
+}
+@media (hover: hover) and (prefers-contrast: no-preference) {
+  .insp-row:not(:hover, :focus-within) .insp-remove { opacity: 0; }
+}
+.insp .insp-remove:hover { background: var(--well); color: var(--ink); }
+.insp .insp-remove:active { background: color-mix(in oklab, var(--ink) 14%, var(--well)); color: var(--ink); }
+
+/* Nothing here yet: an open slot, in the key's colour when the key has one. */
+.insp-invite {
+  display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 16px;
+  border: 1.5px dashed var(--line); color: var(--muted);
+}
+.insp-invite[data-key] {
+  border-color: color-mix(in oklab, var(--k) 70%, var(--ink));
+  background: color-mix(in oklab, var(--k) 14%, var(--card)); color: var(--ink);
+}
+.insp-invite strong { font-weight: var(--w-strong); color: var(--ink); }
+.insp-invite-mark {
+  flex: none; display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: 999px;
+  background: var(--k); color: var(--on-key); font-size: 1rem; font-weight: var(--w-ui); line-height: 1;
+}
+
 /*
  * In the side column (from 1100px, styles.css) the inspector's wrapper scrolls
  * when a long group is taller than the window. A shadow at an edge says there
@@ -84,38 +247,62 @@ const CSS = `
   }
 }
 @keyframes insp-shade { to { opacity: 1; } }
+
+/* Full width, between the keys and the channels: what the key is beside what it plays. */
 @container insp (inline-size >= 580px) {
+  .insp-hero { padding-inline: 24px; }
   .insp-body {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr;
-    grid-template-areas: "display plays" "type plays" "fields plays";
-    column-gap: 20px;
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "type plays" "fields plays";
+    column-gap: 24px; padding-inline: 24px;
   }
-  .insp-display { grid-area: display; }
   .insp-type { grid-area: type; }
   .insp-fields { grid-area: fields; }
-  .insp-plays { grid-area: plays; padding-inline-start: 20px; border-inline-start: 1px solid var(--panel-border); }
+  .insp-plays { grid-area: plays; padding-inline-start: 24px; border-inline-start: 1.5px solid var(--line); }
 }
+
 @media (prefers-reduced-motion: no-preference) {
-  .insp-seg { transition: background-color 130ms ease-out, border-color 130ms ease-out, box-shadow 130ms ease-out; }
+  .insp-hero { transition: background-color 260ms ease-out; }
+  /* A newly selected key's label rises into place. */
+  .insp-big, .insp-sum { animation: insp-rise 320ms var(--spring) both; }
+  .insp-sum { animation-delay: 40ms; }
+  .insp-pill { transition: translate 320ms var(--spring), opacity 160ms ease-out; }
+  .insp .insp-seg { transition: background-color 140ms ease-out, color 180ms ease-out, scale 140ms ease-out; }
+  .insp .insp-seg:active { scale: 0.96; }
+  .insp .insp-step, .insp .insp-remove {
+    transition: background-color 140ms ease-out, color 140ms ease-out, opacity 140ms ease-out, scale 140ms ease-out;
+  }
+  .insp .insp-step:not([aria-disabled="true"]):active, .insp .insp-remove:active { scale: 0.9; }
+  .insp .insp-input { transition: border-color 140ms ease-out; }
+  .insp-chan, .insp-chip, .insp-invite, .insp-invite-mark { transition: background-color 260ms ease-out, border-color 260ms ease-out; }
+  /* A channel added to the group slides into the list. */
+  .insp-row { transition: opacity 220ms ease-out, translate 320ms var(--spring); }
+  @starting-style { .insp-row { opacity: 0; translate: -10px 0; } }
 }
+@keyframes insp-rise { from { opacity: 0; translate: 0 10px; } }
+
+@media (prefers-contrast: more) {
+  .insp .insp-input { &&&& { border-color: var(--muted); } }
+  .insp-type { box-shadow: inset 0 0 0 1.5px var(--muted); }
+}
+
 /*
- * Forced colours drop author backgrounds and shadows, so "recessed" becomes an
- * outline and "pressed" the system's highlight pair. The pressed segment opts
- * out of forcing (the text's backplate would hide it on the highlight), with
- * its background, text, dot and ring all set from that pair.
+ * Forced colours drop author backgrounds and shadows, so every filled shape
+ * gets an outline and "pressed" the system's highlight pair. The pressed
+ * segment opts out of forcing (the text's backplate would hide it on the
+ * highlight), with its background and text both set from that pair.
  */
 @media (forced-colors: active) {
-  .insp-well:not(.insp-type) { outline: 1px solid CanvasText; outline-offset: -1px; }
-  .insp-type .insp-seg [aria-hidden="true"]:not(.insp-ring) { background: ButtonText; }
-  .insp .insp-type .insp-seg .insp-ring { border-color: ButtonText; }
-  .insp .insp-type .insp-seg[aria-pressed="true"] {
-    forced-color-adjust: none; background: Highlight; border-color: Highlight; color: HighlightText;
+  .insp { border: 1px solid CanvasText; }
+  .insp-hero { border-block-end: 1px solid CanvasText; }
+  .insp-type, .insp-chan, .insp-chip, .insp-invite-mark { border: 1px solid CanvasText; }
+  .insp-pill { display: none; }
+  .insp :is(.insp-step, .insp-remove) { &&&& { border: 1.5px solid ButtonText; } }
+  .insp .insp-seg[aria-pressed="true"] {
+    forced-color-adjust: none; background: Highlight; color: HighlightText;
   }
-  .insp .insp-type .insp-seg[aria-pressed="true"]:focus-visible { outline-color: CanvasText; }
-  .insp .insp-type .insp-seg[aria-pressed="true"] * { color: HighlightText; }
-  .insp-type .insp-seg[aria-pressed="true"] [aria-hidden="true"]:not(.insp-ring) { background: HighlightText; }
-  .insp .insp-type .insp-seg[aria-pressed="true"] .insp-ring { border-color: HighlightText; }
+  .insp .insp-seg[aria-pressed="true"]:focus-visible { outline-color: CanvasText; }
 }
 `;
 
@@ -128,48 +315,25 @@ const TYPES: readonly (readonly [type: EditableKeyType, label: string])[] = [
   ['auto', 'Auto'],
 ];
 
-/**
- * Sizes for the small buttons, set inline because Action's own minimum is
- * taller: 28px, or the touch target where the pointer is a finger.
- */
-const ICON_SIZE = {
-  inlineSize: 'max(28px, var(--target))',
-  blockSize: 'max(28px, var(--target))',
-  minInlineSize: 0,
-  minBlockSize: 0,
-} as const;
-const SEGMENT = {
-  blockSize: 'max(28px, var(--target))',
-  minInlineSize: 'var(--target)',
-  minBlockSize: 0,
-} as const;
-
 const Chevron = ({ back = false }: { readonly back?: boolean }) => (
-  <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+  <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
     <path
-      d={back ? 'M10 3.5 5.5 8l4.5 4.5' : 'M6 3.5 10.5 8 6 12.5'}
+      d={back ? 'M10 3 5 8l5 5' : 'M6 3l5 5-5 5'}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.75"
+      strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
   </svg>
 );
 
-const Cross = () => (
-  <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-    <path
-      d="m4 4 8 8m0-8-8 8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-/** A step to the previous or next key. At the ends it stays focusable, so focus isn't dropped there. */
+/**
+ * A step to the previous or next key. At the ends it stays focusable, so focus
+ * isn't dropped there. Tamagui's Button writes aria-disabled from its own
+ * `disabled`, which would take the button out of reach; the attribute is set
+ * on the element instead.
+ */
 const Step = ({
   label,
   back = false,
@@ -180,93 +344,150 @@ const Step = ({
   back?: boolean;
   off: boolean;
   onPress: () => void;
-}) => (
-  <Action
-    kind="ghost"
-    p="0"
-    style={ICON_SIZE}
-    aria-label={label}
-    aria-disabled={off}
-    opacity={off ? 0.35 : 1}
-    cursor={off ? 'not-allowed' : 'pointer'}
-    color="color-10"
-    {...(off ? { bg: 'transparent' } : {})}
-    onPress={() => {
-      if (!off) onPress();
-    }}
-  >
-    <Chevron back={back} />
-  </Action>
-);
+}) => {
+  const ref = useRef<TamaguiElement>(null);
+  useEffect(() => {
+    (ref.current as unknown as HTMLElement | null)?.setAttribute('aria-disabled', String(off));
+  }, [off]);
+  return (
+    <Action
+      ref={ref}
+      className="insp-step"
+      kind="ghost"
+      aria-label={label}
+      onPress={() => {
+        if (!off) onPress();
+      }}
+    >
+      <Chevron back={back} />
+    </Action>
+  );
+};
 
-/** The heading of a part of the inspector, and the look of a field's label. */
+/** The heading of a part of the inspector, which looks like a field's label. */
 const Sub = ({ children, id }: { children: ReactNode; id?: string }) => (
-  <SizableText
-    size="xs"
-    fontWeight="600"
-    color="color-10"
-    render="h3"
-    m="0"
-    {...(id ? { id } : {})}
-  >
+  <h3 className="insp-label" {...(id ? { id } : {})}>
     {children}
-  </SizableText>
+  </h3>
 );
 
 const Hint = ({ children, id }: { children: ReactNode; id?: string }) => (
-  <SizableText size="xs" color="color-8" {...(id ? { id } : {})}>
+  <span className="insp-hint" {...(id ? { id } : {})}>
     {children}
-  </SizableText>
+  </span>
 );
 
 /**
- * The key's label, large, the way the ME-1 writes it. Only a label the key or
- * its channel really has is said to be what the ME-1 shows; a stand-in (an
- * unnamed group, Auto, a channel number) is muted and marked as no label.
+ * "7", or "7+8" for a stereo pair, which a key refers to by its first channel.
+ * (A reference to the second is a problem the field reports, and reads as "8".)
  */
-const Display = ({ system, keyValue: key }: { system: Editable; keyValue: Key }) => {
+const numbersOf = (system: Editable, channel: number, plus = '+'): string =>
+  isStereo(system, channel) && pairStart(channel) === channel
+    ? `${channel}${plus}${channel + 1}`
+    : String(channel);
+
+/** How a channel is read out: "KitPad 7+8 stereo", "Channel 3". */
+const spokenName = (system: Editable, channel: number): string =>
+  `${system.channels[channel - 1]?.name || 'Channel'} ${numbersOf(system, channel)}${
+    isStereo(system, channel) ? ' stereo' : ''
+  }`;
+
+/** The line under the big label: what the key plays and how loud, in a few words. */
+const summary = (system: Editable, key: Key, named: boolean): string => {
+  // Said where the big label is a stand-in (an unnamed group, a channel number) and not what the ME-1 shows.
+  const standIn = named ? [] : ['no label'];
+  switch (key.type) {
+    case 'unassigned':
+      return 'nothing plays yet';
+    case 'auto':
+      return ['next free channel', levelText(key.level)].join(' · ');
+    case 'channel':
+      return [
+        `Ch ${numbersOf(system, key.channel)}`,
+        system.channels[key.channel - 1]?.name,
+        ...standIn,
+        levelText(key.level),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    case 'group': {
+      const count = key.members.length;
+      return [
+        ...standIn,
+        count === 0 ? 'no channels yet' : `${count} channel${count === 1 ? '' : 's'}`,
+        levelText(key.level),
+      ].join(' · ');
+    }
+    case 'unknown':
+      return [...standIn, 'kept as it is'].join(' · ');
+  }
+};
+
+/**
+ * The top of the card: a block of the key's colour with its number and type,
+ * the steps to the keys either side, and its label, large, the way the ME-1
+ * writes it. Only a label the key or its channel really has is said to be
+ * what the ME-1 shows; a stand-in (an unnamed group, Auto, a channel number)
+ * is quieter, and the line under it says there is no label. An empty key has
+ * no colour, and says so in the same big voice; a key of a kind this editor
+ * only keeps has none either, like its tile.
+ */
+const Hero = ({
+  system,
+  index,
+  onStep,
+}: {
+  system: Editable;
+  index: number;
+  onStep: (to: number) => void;
+}) => {
+  const key = system.keys[index];
+  if (!key) return null;
+  const n = index + 1;
+  const empty = key.type === 'unassigned';
+  const plain = empty || key.type === 'unknown';
   const named =
     key.type === 'channel'
       ? Boolean(key.name || system.channels[key.channel - 1]?.name)
       : (key.type === 'group' || key.type === 'unknown') && Boolean(key.name);
+  const label = empty ? 'Empty' : keyLabel(system, key);
   return (
-    <XStack
-      className="insp-display insp-well"
-      items="center"
-      gap="2.5"
-      pl="2"
-      pr="3"
-      minH={40}
-      rounded="lg"
-    >
-      <Theme name={KEY_TYPE_THEME[key.type] ?? null}>
-        <YStack
-          w={4}
-          h={24}
-          rounded="full"
-          bg={key.type === 'unassigned' ? 'color-5' : 'color-9'}
-          shrink={0}
-          aria-hidden
-        />
-      </Theme>
-      {named && <span className="insp-sr">The ME-1 shows </span>}
-      <SizableText
-        size="xl"
-        fontFamily={DISPLAY_FONT}
-        fontWeight="600"
-        letterSpacing={0.5}
-        color={named ? 'color' : 'color-8'}
-        numberOfLines={1}
-        flex={1}
-        minW={0}
-        aria-hidden={key.type === 'unassigned'}
+    <div className="insp-hero" data-plain={plain ? '' : undefined}>
+      <div className="insp-hero-top">
+        <h2 className="insp-eyebrow">
+          <span className="insp-sr">
+            Key {n}
+            {empty ? '' : `: ${KEY_TYPE_LABEL[key.type]}`}
+          </span>
+          <span aria-hidden="true">
+            Key {String(n).padStart(2, '0')}
+            {empty ? '' : ` · ${KEY_TYPE_LABEL[key.type]}`}
+          </span>
+        </h2>
+        <div className="insp-steps">
+          <Step label="Previous key" back off={index <= 0} onPress={() => onStep(index - 1)} />
+          <Step
+            label="Next key"
+            off={index >= system.keys.length - 1}
+            onPress={() => onStep(index + 1)}
+          />
+        </div>
+      </div>
+      {/* Keyed by the key, so the label rises in when another is selected and stays put while it's typed. */}
+      <p
+        key={`big-${index}`}
+        className="insp-big display"
+        data-empty={empty ? '' : undefined}
+        data-standin={!empty && !named && key.type !== 'auto' ? '' : undefined}
+        data-long={label.length > 6 ? '' : undefined}
       >
-        {keyLabel(system, key)}
-      </SizableText>
-      <SizableText size="xs" color="color-8" shrink={0} aria-hidden={named}>
-        {named ? 'on the ME-1' : 'no label'}
-      </SizableText>
-    </XStack>
+        {named && <span className="insp-sr">The ME-1 shows </span>}
+        {label}
+      </p>
+      <p key={`sum-${index}`} className="insp-sum">
+        {summary(system, key, named || key.type === 'auto')}
+      </p>
+    </div>
   );
 };
 
@@ -279,17 +500,20 @@ const Display = ({ system, keyValue: key }: { system: Editable; keyValue: Key })
  * is always the pressed button, marked `focusgroupstart`). Elsewhere a roving
  * tabindex does the same: the stop follows focus while it is inside, so Tab
  * always leaves the group, and goes back to the pressed button after.
+ *
+ * The ink pill behind the pressed button is one element that slides to it.
  */
 const TypeSwitch = ({ index, type }: { index: number; type: Key['type'] }) => {
   const edit = useSetAtom(editAtom);
   const [focused, setFocused] = useState<EditableKeyType | null>(null);
-  const pressed = TYPES.find(([t]) => t === type)?.[0] ?? 'unassigned';
+  const at = TYPES.findIndex(([t]) => t === type);
+  const pressed = TYPES[at]?.[0] ?? 'unassigned';
   const stop = focused ?? pressed;
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     const buttons = [...e.currentTarget.querySelectorAll<HTMLElement>('button')];
-    const at = buttons.indexOf(e.target as HTMLElement);
-    if (at < 0) return;
+    const from = buttons.indexOf(e.target as HTMLElement);
+    if (from < 0) return;
     const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
     const step = { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1 }[e.key];
     const next =
@@ -299,19 +523,16 @@ const TypeSwitch = ({ index, type }: { index: number; type: Key['type'] }) => {
           ? buttons.length - 1
           : step === undefined
             ? undefined
-            : (at + step + buttons.length) % buttons.length;
+            : (from + step + buttons.length) % buttons.length;
     if (next === undefined) return;
     e.preventDefault();
     buttons[next]?.focus();
   };
   return (
     <XStack
-      className="insp-type insp-well"
+      className="insp-type"
       role="group"
       aria-label={`Key ${index + 1} type`}
-      p={3}
-      gap={2}
-      rounded="lg"
       {...({ focusgroup: 'toolbar wrap nomemory' } as Record<string, string>)}
       {...(NATIVE_FOCUSGROUP
         ? {}
@@ -322,43 +543,26 @@ const TypeSwitch = ({ index, type }: { index: number; type: Key['type'] }) => {
             },
           })}
     >
-      {TYPES.map(([t, label]) => {
-        const on = type === t;
-        return (
-          <Action
-            key={t}
-            className="insp-seg"
-            kind="ghost"
-            aria-pressed={on}
-            {...(NATIVE_FOCUSGROUP
-              ? ((t === pressed ? { focusgroupstart: '' } : {}) as Record<string, string>)
-              : { tabIndex: t === stop ? 0 : -1, onFocus: () => setFocused(t) })}
-            px="1.5"
-            gap="1.5"
-            rounded="md"
-            style={SEGMENT}
-            onPress={() => edit((s) => setKeyType(s, index, t))}
-          >
-            {t === 'unassigned' ? (
-              <YStack
-                className="insp-ring"
-                w={8}
-                h={8}
-                rounded="full"
-                borderWidth={1.5}
-                borderColor="color-8"
-                shrink={0}
-                aria-hidden
-              />
-            ) : (
-              <TypeDot type={t} />
-            )}
-            <SizableText size="sm" fontWeight="500" color={on ? 'color' : 'color-10'}>
-              {label}
-            </SizableText>
-          </Action>
-        );
-      })}
+      <span
+        className="insp-pill"
+        aria-hidden="true"
+        data-off={at < 0 ? '' : undefined}
+        style={{ '--insp-at': Math.max(at, 0) } as CSSProperties}
+      />
+      {TYPES.map(([t, label]) => (
+        <Action
+          key={t}
+          className="insp-seg"
+          kind="ghost"
+          aria-pressed={type === t}
+          {...(NATIVE_FOCUSGROUP
+            ? ((t === pressed ? { focusgroupstart: '' } : {}) as Record<string, string>)
+            : { tabIndex: t === stop ? 0 : -1, onFocus: () => setFocused(t) })}
+          onPress={() => edit((s) => setKeyType(s, index, t))}
+        >
+          <span>{label}</span>
+        </Action>
+      ))}
     </XStack>
   );
 };
@@ -379,21 +583,20 @@ const Field = ({
   error: ReactNode;
   children: ReactNode;
 }) => (
-  <YStack gap="1">
-    <XStack items="baseline" justify="space-between" columnGap="2" flexWrap="wrap">
-      <SizableText
-        size="xs"
-        fontWeight="600"
-        color="color-10"
-        {...(htmlFor ? { render: 'label', htmlFor } : {})}
-      >
-        {label}
-      </SizableText>
+  <div className="insp-field">
+    <div className="insp-field-head">
+      {htmlFor ? (
+        <label className="insp-label" htmlFor={htmlFor}>
+          {label}
+        </label>
+      ) : (
+        <span className="insp-label">{label}</span>
+      )}
       {hint && <Hint {...(hintId ? { id: hintId } : {})}>{hint}</Hint>}
-    </XStack>
+    </div>
     {children}
     {error}
-  </YStack>
+  </div>
 );
 
 const LabelField = ({
@@ -415,13 +618,11 @@ const LabelField = ({
     <Field label="Label" htmlFor={id} hint={hint} hintId={`${id}-hint`} error={error}>
       <Input
         id={id}
-        className="target"
-        size="sm"
+        className="insp-input target"
         maxLength={6}
         pattern="[0-9A-Za-z ]{1,6}"
         value={value}
         placeholder={placeholder}
-        fontFamily={DISPLAY_FONT}
         onChangeText={(name) => edit((s) => setKeyName(s, index, name), path)}
         data-issue-path={path}
         autoComplete="off"
@@ -442,7 +643,7 @@ const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
   const master = key.type === 'group';
   return (
     <Field label={master ? 'Master level' : 'Level'} error={<FieldError path={path} />}>
-      <YStack data-issue-path={path} pt="0.5">
+      <div data-issue-path={path}>
         <Fader
           value={key.level}
           onChange={(level, { merge }) =>
@@ -450,41 +651,10 @@ const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
           }
           label={`Key ${index + 1} ${master ? 'master level' : 'level'}`}
         />
-      </YStack>
+      </div>
     </Field>
   );
 };
-
-/**
- * "7", or "7+8" for a stereo pair, which a key refers to by its first channel.
- * (A reference to the second is a problem the field reports, and reads as "8".)
- */
-const numbersOf = (system: Editable, channel: number): string =>
-  isStereo(system, channel) && pairStart(channel) === channel
-    ? `${channel}+${channel + 1}`
-    : String(channel);
-
-/** How a channel is read out: "KitPad 7+8 stereo", "Channel 3". */
-const spokenName = (system: Editable, channel: number): string =>
-  `${system.channels[channel - 1]?.name || 'Channel'} ${numbersOf(system, channel)}${
-    isStereo(system, channel) ? ' stereo' : ''
-  }`;
-
-const StereoMark = () => (
-  <SizableText
-    size="xs"
-    fontWeight="600"
-    color="color-10"
-    px="1"
-    rounded="sm"
-    borderWidth={1}
-    borderColor="border-color"
-    shrink={0}
-    aria-hidden
-  >
-    ST
-  </SizableText>
-);
 
 /** The one channel a channel key plays. It changes by picking another in the Channels panel. */
 const PlaysChannel = ({
@@ -501,69 +671,41 @@ const PlaysChannel = ({
   const path = `keys[${index}].channel`;
   const name = system.channels[channel - 1]?.name;
   return (
-    <YStack className="insp-plays" gap="2">
+    <div className="insp-plays">
       <Sub id={`${id}-h`}>Plays</Sub>
-      <YStack gap="1">
-        <XStack
-          className="insp-well"
-          role="group"
-          aria-labelledby={`${id}-h`}
-          aria-describedby={`${id}-more`}
-          tabIndex={-1}
-          data-issue-path={path}
-          items="center"
-          gap="2"
-          px="3"
-          minH={40}
-          rounded="lg"
-        >
-          <span className="insp-sr">{spokenName(system, channel)}</span>
-          <SizableText
-            size="xs"
-            fontFamily={DISPLAY_FONT}
-            fontWeight="600"
-            color="color-10"
-            shrink={0}
-            aria-hidden
-          >
-            Ch {numbersOf(system, channel)}
-          </SizableText>
-          <SizableText
-            size="sm"
-            fontFamily={name ? DISPLAY_FONT : undefined}
-            fontWeight={name ? '600' : '400'}
-            color={name ? 'color' : 'color-8'}
-            numberOfLines={1}
-            flex={1}
-            minW={0}
-            aria-hidden
-          >
-            {name || 'No name'}
-          </SizableText>
-          {isStereo(system, channel) && <StereoMark />}
-        </XStack>
-        <YStack id={`${id}-more`}>
-          <Hint>Pick another channel in Channels to change it.</Hint>
-          <FieldError path={path} />
-        </YStack>
-      </YStack>
-      <Action kind="subtle" self="flex-start" className="target" gap="1.5" onPress={onGroup}>
-        <TypeDot type="group" />
+      {/* biome-ignore lint/a11y/useSemanticElements: a named group of two facts, not a form's fieldset */}
+      <div
+        className="insp-chan"
+        role="group"
+        aria-labelledby={`${id}-h`}
+        aria-describedby={`${id}-more`}
+        tabIndex={-1}
+        data-issue-path={path}
+      >
+        <span className="insp-sr">{spokenName(system, channel)}</span>
+        <span className="insp-chip" aria-hidden="true">
+          {numbersOf(system, channel, '–')}
+        </span>
+        <span className="insp-chan-name" data-none={name ? undefined : ''} aria-hidden="true">
+          {name || 'No name'}
+        </span>
+      </div>
+      <div id={`${id}-more`}>
+        <Hint>Pick another channel in Channels to change it.</Hint>
+        <FieldError path={path} />
+      </div>
+      <Action kind="subtle" className="insp-make target" onPress={onGroup}>
         Make it a group
       </Action>
-    </YStack>
+    </div>
   );
 };
-
-/** Line heights for the two-line channel name in a member row, so eight rows fit the side column. */
-const TIGHT = { lineHeight: '16px' } as const;
-const TIGHTER = { lineHeight: '14px' } as const;
 
 /** A group's channels, each with its level in the group and a way out of it. */
 const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) => {
   const system = useAtomValue(systemAtom);
   const edit = useSetAtom(editAtom);
-  const root = useRef<TamaguiElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   /** The row a channel was just removed from with its button, to keep focus in the list. */
   const removedAt = useRef<number | null>(null);
   const members = key.type === 'group' ? key.members : [];
@@ -574,88 +716,61 @@ const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
     const at = removedAt.current;
     if (at === null) return;
     removedAt.current = null;
-    const list = root.current as HTMLElement | null;
+    const list = root.current;
     const buttons = list?.querySelectorAll<HTMLElement>('[data-insp-remove]') ?? [];
     (buttons[Math.min(at, buttons.length - 1)] ?? list)?.focus();
   });
 
   return (
-    <YStack
+    // biome-ignore lint/a11y/useSemanticElements: a named group of rows, not a form's fieldset
+    <div
       className="insp-plays"
       ref={root}
       tabIndex={-1}
       role="group"
       aria-label={`Key ${n} channels`}
-      gap="2"
     >
-      <XStack items="baseline" justify="space-between" gap="2">
+      <div className="insp-field-head">
         <Sub>
           Channels
-          {members.length > 0 && (
-            <SizableText size="xs" color="color-8" fontWeight="400">
-              {` · ${members.length}`}
-            </SizableText>
-          )}
+          {members.length > 0 && <small>{` · ${members.length}`}</small>}
         </Sub>
         {members.length > 0 && <Hint>Level in the group, dB</Hint>}
-      </XStack>
+      </div>
       {members.length === 0 ? (
-        <YStack className="insp-empty" gap="1" p="3" rounded="lg">
-          <SizableText size="sm" fontWeight="600">
-            No channels yet
-          </SizableText>
-          <SizableText size="sm" color="color-10">
-            Pick channels in Channels to add them to this group. Each gets its own level here.
-          </SizableText>
-        </YStack>
+        <div className="insp-invite" data-key="">
+          <span className="insp-invite-mark" aria-hidden="true">
+            +
+          </span>
+          <p className="insp-copy">
+            <strong>No channels yet.</strong> Pick channels in Channels to add them to this group.
+            Each gets its own level here.
+          </p>
+        </div>
       ) : (
-        <YStack render="ul" role="list" m="0" p="0">
+        // biome-ignore lint/a11y/noRedundantRoles: Safari drops the list role from a list without markers
+        <ul className="insp-members" role="list">
           {members.map((m, j) => {
             const name = system.channels[m.channel - 1]?.name;
-            const stereo = isStereo(system, m.channel);
+            const numbers = numbersOf(system, m.channel);
             const spoken = spokenName(system, m.channel);
             const path = `keys[${index}].members[${j}]`;
             return (
-              <YStack
-                key={m.channel}
-                className="insp-row"
-                render="li"
-                data-issue-path={path}
-                py={2.5}
-              >
-                <XStack items="center" gap="2" minH={30}>
+              <li key={m.channel} className="insp-row" data-issue-path={path}>
+                <div className="insp-row-main">
                   <span className="insp-sr">{spoken}</span>
-                  <YStack w={56} shrink={0} aria-hidden>
-                    <SizableText
-                      size="sm"
-                      fontFamily={DISPLAY_FONT}
-                      fontWeight="600"
-                      numberOfLines={1}
-                      style={TIGHT}
-                    >
-                      {name || `Ch ${m.channel}`}
-                    </SizableText>
-                    {(name || stereo) && (
-                      <XStack items="center" gap="1">
-                        <SizableText
-                          size="xs"
-                          fontFamily={DISPLAY_FONT}
-                          color="color-8"
-                          style={TIGHTER}
-                        >
-                          {name
-                            ? numbersOf(system, m.channel)
-                            : numbersOf(system, m.channel).slice(String(m.channel).length)}
-                        </SizableText>
-                        {stereo && (
-                          <SizableText size="xs" color="color-8" fontWeight="600" style={TIGHTER}>
-                            ST
-                          </SizableText>
-                        )}
-                      </XStack>
-                    )}
-                  </YStack>
-                  <YStack flex={1} minW={0} data-issue-path={`${path}.level`}>
+                  <span
+                    className="insp-row-name"
+                    data-none={name ? undefined : ''}
+                    aria-hidden="true"
+                  >
+                    {name || `Ch ${m.channel}`}
+                  </span>
+                  {/* An unnamed channel's number is its name; only a pair's second number is left to add. */}
+                  <span className="insp-row-num" aria-hidden="true">
+                    {name ? numbers : numbers.slice(String(m.channel).length)}
+                  </span>
+                  <div data-issue-path={`${path}.level`}>
                     <Fader
                       compact
                       value={m.level}
@@ -667,12 +782,10 @@ const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
                       }
                       label={`${spoken} level in key ${n}`}
                     />
-                  </YStack>
+                  </div>
                   <Action
+                    className="insp-remove"
                     kind="ghost"
-                    p="0"
-                    style={ICON_SIZE}
-                    color="color-10"
                     data-insp-remove
                     // Where the Problems list lands for a problem with the channel itself.
                     data-issue-focus
@@ -682,22 +795,23 @@ const PlaysGroup = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
                       edit((s) => toggleMember(s, index, m.channel));
                     }}
                   >
-                    <Cross />
+                    <span aria-hidden="true">✕</span>
                   </Action>
-                </XStack>
+                </div>
                 <FieldError path={path} />
-              </YStack>
+              </li>
             );
           })}
-        </YStack>
+        </ul>
       )}
-    </YStack>
+    </div>
   );
 };
 
 /**
- * The selected key's editor: its label as the ME-1 shows it, its type, and by
- * type its label, level and then what it plays, in that order for every type. Channels are picked in the Channels
+ * The selected key's editor, a card in the key's colour: its label as the
+ * ME-1 shows it, its type, and by type its label, level and then what it
+ * plays, in that order for every type. Channels are picked in the Channels
  * panel; this shows the result and holds the rest.
  */
 export const Inspector = () => {
@@ -719,45 +833,45 @@ export const Inspector = () => {
 
   if (!key) return null;
   const n = index + 1;
-  const last = system.keys.length - 1;
 
   return (
-    <Panel
+    <Card
       className="insp"
       render="section"
       aria-label={`Key ${n}`}
       data-issue-path={`keys[${index}]`}
-      p={{ default: '3', sm: '4' }}
+      // An empty or unknown key has no colour; nothing inside it asks for one.
+      {...(key.type === 'unassigned' || key.type === 'unknown' ? {} : { style: keyStyle(index) })}
     >
       <style href="insp" precedence="default">
         {CSS}
       </style>
-      <XStack items="center" justify="space-between" gap="2">
-        <PanelTitle>Key {n}</PanelTitle>
-        <XStack className="insp-steps" gap="1">
-          <Step label="Previous key" back off={index <= 0} onPress={() => setIndex(index - 1)} />
-          <Step label="Next key" off={index >= last} onPress={() => setIndex(index + 1)} />
-        </XStack>
-      </XStack>
+      <Hero system={system} index={index} onStep={setIndex} />
 
       <div className="insp-body" ref={body}>
-        <Display system={system} keyValue={key} />
         <TypeSwitch index={index} type={key.type} />
 
         {key.type === 'unassigned' && (
-          <YStack className="insp-plays">
-            <YStack className="insp-empty" p="3" rounded="lg">
-              <SizableText size="sm" color="color-10">
+          <div className="insp-plays">
+            <div className="insp-invite">
+              <p className="insp-copy">
                 This key is empty. Pick a channel in Channels to give it one, or choose a type.
-              </SizableText>
-            </YStack>
-          </YStack>
+              </p>
+            </div>
+          </div>
         )}
 
         {key.type === 'unknown' && (
-          <YStack className="insp-plays" gap="1">
+          <div className="insp-plays">
             <Theme name="red">
-              <XStack gap="2" p="3" rounded="lg" bg="color-1" borderWidth={1} borderColor="color-6">
+              <XStack
+                gap="2"
+                p="3"
+                rounded={16}
+                bg="color-1"
+                borderWidth={1.5}
+                borderColor="color-6"
+              >
                 <SizableText size="sm" color="color-9" pt="0.5" shrink={0}>
                   <WarningIcon />
                 </SizableText>
@@ -768,11 +882,11 @@ export const Inspector = () => {
               </XStack>
             </Theme>
             <FieldError path={`keys[${index}]`} />
-          </YStack>
+          </div>
         )}
 
         {(key.type === 'auto' || key.type === 'channel' || key.type === 'group') && (
-          <YStack key={`fields-${index}`} className="insp-fields" gap="3">
+          <div key={`fields-${index}`} className="insp-fields">
             {key.type !== 'auto' && (
               <LabelField
                 index={index}
@@ -790,16 +904,16 @@ export const Inspector = () => {
               />
             )}
             <LevelField index={index} keyValue={key} />
-          </YStack>
+          </div>
         )}
 
         {key.type === 'auto' && (
-          <YStack className="insp-plays" gap="1">
+          <div className="insp-plays">
             <Sub>Plays</Sub>
-            <SizableText size="sm" color="color-10">
+            <p className="insp-copy">
               Auto takes the first channel that no other key or group uses.
-            </SizableText>
-          </YStack>
+            </p>
+          </div>
         )}
 
         {key.type === 'channel' && (
@@ -815,6 +929,6 @@ export const Inspector = () => {
 
         {key.type === 'group' && <PlaysGroup key={`plays-${index}`} index={index} keyValue={key} />}
       </div>
-    </Panel>
+    </Card>
   );
 };

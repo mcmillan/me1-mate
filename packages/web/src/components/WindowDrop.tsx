@@ -1,23 +1,32 @@
 import { useSetAtom } from 'jotai';
-import { useEffect, useState } from 'react';
-import { SizableText, YStack } from 'tamagui';
-import { ACCENT } from '../lib/theme.ts';
-import { Mono } from './Notice.tsx';
+import { type CSSProperties, useEffect, useState } from 'react';
+import { keyStyle } from '../lib/theme.ts';
 import { OpenFiles, openFilesAtom } from './OpenFiles.tsx';
 
 const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
 
-const DropIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+/**
+ * The overlay: the canvas, nearly opaque, a thick dashed ring just inside the
+ * window, and one huge line with the two file types on keys' colours. It
+ * takes no pointer events, so the drop lands on the window.
+ */
+const CSS_TEXT = `
+.drop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 48px 32px; background: color-mix(in oklab, var(--canvas) 92%, transparent); pointer-events: none; }
+.drop-ring { position: absolute; inset: 14px; border: 5px dashed var(--ink); border-radius: 36px; }
+.drop-line { display: block; margin: 0; font-size: clamp(2rem, 1rem + 5.5vw, 5rem); font-weight: var(--w-display); line-height: 1.2; text-align: center; text-wrap: balance; }
+.drop-tag { display: inline-block; padding-inline: 0.3em; border: 2px solid transparent; border-radius: 999px; background: var(--k); color: var(--on-key); line-height: 1.15; rotate: var(--tilt); }
+.drop-sub { display: block; margin: 20px 0 0; color: var(--muted); font-size: 1.125rem; font-weight: var(--w-ui); line-height: 1.4; text-align: center; text-wrap: balance; }
+.drop-sub span { color: var(--k); }
+.drop { animation: drop-fade 120ms ease-out both; }
+@media (prefers-reduced-motion: no-preference) {
+  .drop-ring { animation: drop-ring 350ms var(--spring) both; }
+  .drop-tag { animation: drop-stick 400ms var(--spring) backwards; }
+  .drop-tag + .drop-tag { animation-delay: 80ms; }
+}
+@keyframes drop-fade { from { opacity: 0; } }
+@keyframes drop-ring { from { scale: 1.04; } }
+@keyframes drop-stick { from { scale: 0.7; rotate: 0deg; } }
+`;
 
 /**
  * The whole window is a drop target for `.ME1` and `.meu` files, with an
@@ -72,72 +81,32 @@ export const WindowDrop = () => {
     <>
       <OpenFiles />
       {over && (
-        <YStack
-          position="fixed"
-          t={0}
-          l={0}
-          r={0}
-          b={0}
-          z={1000}
-          p="3"
-          pointerEvents="none"
-          aria-hidden
-        >
-          <YStack
-            position="absolute"
-            t={0}
-            l={0}
-            r={0}
-            b={0}
-            opacity={0.9}
-            style={{ background: 'var(--canvas)' }}
-          />
-          {/* The dashed frame is its own element, so the accent stays off the card's text. */}
-          <YStack
-            theme={ACCENT}
-            position="absolute"
-            t={12}
-            l={12}
-            r={12}
-            b={12}
-            rounded="xl"
-            borderWidth={2}
-            borderStyle="dashed"
-            borderColor="color-8"
-          />
-          <YStack position="relative" flex={1} items="center" justify="center" p="4">
-            <YStack
-              className="panel"
-              items="center"
-              gap="2"
-              px="5"
-              py="4"
-              maxW="100%"
-              rounded="xl"
-              borderWidth={1}
-            >
-              <YStack
-                theme={ACCENT}
-                w={36}
-                h={36}
-                rounded="lg"
-                items="center"
-                justify="center"
-                bg="color-3"
-                color="color-11"
+        <div className="drop" aria-hidden="true">
+          <style>{CSS_TEXT}</style>
+          <div className="drop-ring" />
+          <div>
+            <p className="display drop-line">
+              Drop your{' '}
+              <span
+                className="drop-tag"
+                style={{ ...keyStyle(0), '--tilt': '-3deg' } as CSSProperties}
               >
-                <DropIcon />
-              </YStack>
-              <SizableText size="base" fontWeight="600" text="center">
-                Drop to open
-              </SizableText>
-              <SizableText size="sm" color="color-10" text="center">
-                An <Mono>.ME1</Mono>, a <Mono>.meu</Mono>, or both. They’re read here in the
-                browser, not uploaded.
-              </SizableText>
-            </YStack>
-          </YStack>
-        </YStack>
+                .ME1
+              </span>{' '}
+              and{' '}
+              <span
+                className="drop-tag"
+                style={{ ...keyStyle(3), '--tilt': '2deg' } as CSSProperties}
+              >
+                .meu
+              </span>
+            </p>
+            <p className="drop-sub">
+              One or both. <span style={keyStyle(0)}>♥</span> They’re read here in the browser,
+              never uploaded.
+            </p>
+          </div>
+        </div>
       )}
     </>
   );

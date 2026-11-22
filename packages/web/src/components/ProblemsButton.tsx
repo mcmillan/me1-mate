@@ -3,22 +3,9 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { SizableText, XStack, YStack } from 'tamagui';
 import { describeIssue, issueIsAt, issueKey } from '../lib/messages.ts';
 import { issuesAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
-import { WarningIcon } from './FieldError.tsx';
+import { useRedPill } from './ConfirmDialog.tsx';
 import { Menu, MenuItem } from './Menu.tsx';
 import { Action } from './ui.tsx';
-
-const CheckIcon = () => (
-  <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-    <path
-      d="M3 8.5 6.5 12 13 4.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 /**
  * The input for an issue: the element whose `data-issue-path` is the issue's
@@ -68,27 +55,22 @@ export const useJumpToIssue = (): ((issue: Issue) => void) => {
 };
 
 /**
- * Whether the system can be exported: a quiet "Ready to export", or a count of
- * problems that opens a list; choosing one jumps to the field to fix.
+ * Whether the system can be exported. While it can, there is nothing to see:
+ * the Export button says enough, and "Ready to export" is only spoken. While
+ * it can't, a count of problems that opens a list; choosing one jumps to the
+ * field to fix.
  */
 export const ProblemsButton = () => {
   const issues = useAtomValue(issuesAtom);
   const system = useAtomValue(systemAtom);
   const jump = useJumpToIssue();
+  const redPill = useRedPill();
   if (issues.length === 0) {
     return (
-      // `.top-ready` and `.top-quiet` (TopBar.tsx): on a narrow bar the check
-      // stands for the words, and on the narrowest the words are only spoken.
-      <XStack className="top-ready" items="center" gap="1.5" px="1.5" role="status">
-        <SizableText size="sm" color="color-10" aria-hidden>
-          <CheckIcon />
-        </SizableText>
-        <span className="top-quiet">
-          <SizableText size="sm" color="color-10">
-            Ready to export
-          </SizableText>
-        </span>
-      </XStack>
+      // `.top-said` (TopBar.tsx): for screen readers only.
+      <div className="top-said" role="status">
+        Ready to export
+      </div>
     );
   }
 
@@ -110,19 +92,19 @@ export const ProblemsButton = () => {
           <Action
             {...props}
             theme="red"
-            kind="subtle"
-            className="target"
-            px="2"
+            kind="primary"
+            // `.top-problems` (TopBar.tsx) tightens it on a narrow bar.
+            className="target top-problems"
+            px="3"
             aria-label={`${count} to fix before exporting`}
-            bg={open ? 'color-4' : { default: 'color-2', hover: 'color-3', press: 'color-4' }}
-            borderColor="color-7"
-            color="color-11"
+            {...redPill}
+            {...(open ? { bg: 'color-8', borderColor: 'color-8' } : {})}
           >
             <XStack items="center" gap="1.5">
-              <SizableText size="sm" color="color-11" aria-hidden>
-                <WarningIcon />
+              <SizableText size="sm" color={redPill.color} aria-hidden>
+                ⚠
               </SizableText>
-              <SizableText size="sm" fontWeight="600" color="color-11">
+              <SizableText size="sm" className="top-label" color={redPill.color}>
                 {problems.length}
                 <span className="top-quiet">
                   {problems.length === 1 ? ' problem' : ' problems'}
@@ -131,15 +113,15 @@ export const ProblemsButton = () => {
             </XStack>
           </Action>
         )}
-        panel={{ maxH: 360, overflow: 'scroll', p: '1', gap: '0.5' }}
+        panel={{ maxH: 360, overflow: 'scroll' }}
       >
         {problems.map(([id, { issue, message }]) => (
           <MenuItem key={id} py="2" px="2.5" onSelect={() => jump(issue)}>
-            <XStack items="flex-start" gap="2" w="100%">
-              <SizableText size="sm" theme="red" color="color-7" pt="0.5" aria-hidden>
-                <WarningIcon />
+            <XStack items="baseline" gap="2" w="100%">
+              <SizableText size="sm" theme="red" color="color-7" aria-hidden>
+                ⚠
               </SizableText>
-              <SizableText size="sm" text="left" flex={1}>
+              <SizableText size="sm" className="menu-text" text="left" flex={1}>
                 {message}
               </SizableText>
             </XStack>
