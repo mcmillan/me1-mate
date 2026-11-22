@@ -28,7 +28,7 @@ const levelIssues = (level: Level | undefined, at: string): Issues =>
       level === 'off' ||
       (Number.isFinite(level) && level >= LEVEL_MIN && level <= LEVEL_MAX),
     at,
-    `level must be 'off' or ${LEVEL_MIN.toFixed(2)}…${LEVEL_MAX} dB`,
+    `level must be 'off' or ${LEVEL_MIN.toFixed(2)}…${LEVEL_MAX.toFixed(2)} dB`,
   );
 
 const panIssues = (pan: number | undefined, at: string): Issues =>

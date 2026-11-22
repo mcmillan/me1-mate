@@ -4,7 +4,16 @@
  * fix them.
  */
 
-import { type Issue, KEY_COUNT, type Key, LEVEL_MAX, LEVEL_MIN } from '@mcmillan/me1-mate-core';
+import {
+  type Issue,
+  KEY_COUNT,
+  type Key,
+  LEVEL_MAX,
+  LEVEL_MIN,
+  PAN_CENTRE,
+  PAN_MAX,
+  PAN_MIN,
+} from '@mcmillan/me1-mate-core';
 import { useAtomValue } from 'jotai';
 import type { Editable } from './edit.ts';
 import { issuesAtom, systemAtom } from './store.ts';
@@ -13,7 +22,9 @@ import { issuesAtom, systemAtom } from './store.ts';
 const KEY_PATH = /^keys\[(\d+)\](?:\.members\[(\d+)\])?(?:\.(\w+))?/;
 const CHANNEL_PATH = /^channels\[(\d+)\](?:\.(\w+))?/;
 
-const levelRange = `between ${Math.round(LEVEL_MIN)} and +${LEVEL_MAX} dB`;
+const levelRange = `between ${Math.round(LEVEL_MIN)} and +${LEVEL_MAX.toFixed(1)} dB`;
+/** Pan as the readout shows it: steps either side of the centre. */
+const panRange = `from L ${PAN_CENTRE - PAN_MIN} to R ${PAN_MAX - PAN_CENTRE}`;
 
 const sentence = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -80,7 +91,7 @@ const describeKeyIssue = (
     }
     if (field === 'channel') return `Key ${n}'s group has a channel that doesn't exist`;
     if (field === 'level') return `Key ${n}'s level for ${who} must be off or ${levelRange}`;
-    if (field === 'pan') return `Key ${n}'s pan for ${who} is out of range`;
+    if (field === 'pan') return `Key ${n}'s pan for ${who} must be ${panRange}`;
     return `Key ${n}: ${reason}`;
   }
 
@@ -98,7 +109,11 @@ const describeKeyIssue = (
     case 'level':
       return `Key ${n}'s level must be off or ${levelRange}`;
     case 'pan':
-      return `Key ${n}'s pan is out of range`;
+      return key?.type === 'unknown'
+        ? `Key ${n} has a setting the ME-1 can't store; change its type to reset it`
+        : `Key ${n}'s ${key?.type === 'aux' ? 'balance' : 'pan'} must be ${panRange}`;
+    case 'muted':
+      return `Key ${n}'s mute must be on or off`;
     case 'flags':
     case 'source':
       return `Key ${n} has a setting the ME-1 can't store; change its type to reset it`;

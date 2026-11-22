@@ -5,6 +5,7 @@ import {
   buildMEUConfig,
   type Channel,
   type Key,
+  LEVEL_MAX,
   parseConfig,
   parseME1Config,
   parseMEUConfig,
@@ -173,6 +174,19 @@ describe('building a system from scratch', () => {
       'keys[3].members[0].pan',
       'keys[2].members[1].channel',
       'keys[3].members[0].channel',
+    ]);
+  });
+
+  it('tops levels out at the most an ME-1 saves', () => {
+    expect(LEVEL_MAX).toBe(9.62109375);
+    const top = unwrap(
+      buildME1Config({ keys: [{ type: 'channel', channel: 1, level: LEVEL_MAX }] }),
+    );
+    // Key 1's level, an int16 at +194 in its record, after the 7-byte header.
+    expect([top[7 + 194], top[7 + 195]]).toEqual([0xff, 0x9f]);
+    const issues = unwrapErr(create({ keys: [{ type: 'channel', channel: 1, level: 10 }] }));
+    expect(issues).toEqual([
+      { path: 'keys[0].level', reason: "level must be 'off' or -117.99…9.62 dB" },
     ]);
   });
 

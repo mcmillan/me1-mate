@@ -1,7 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseConfig, parseME1Config } from '@mcmillan/me1-mate-core';
-import { brokenFile, expect, FIXTURES, fits, scratch, test } from './helpers.ts';
+import {
+  brokenFile,
+  differences,
+  expect,
+  FIXTURES,
+  fits,
+  josephWith,
+  ME1_AT,
+  scratch,
+  test,
+} from './helpers.ts';
 
 test('opening files over unsaved work never asks, and loads them @desktop', async ({
   editor,
@@ -126,6 +136,128 @@ test('a new system exports and parses @desktop', async ({ editor }) => {
   expect(fresh.name).toBe('SCRATCH.ME1');
   const back = parseME1Config(readFileSync(fresh.path));
   expect(back.isOk && back.value.keys[0]?.type).toBe('auto');
+});
+
+test('a key switched to Aux In or Tone takes no channels and exports a file the core reads @desktop', async ({
+  editor,
+  page,
+}) => {
+  await editor.openJoseph();
+  await editor.tiles.nth(13).click();
+  await editor.typeButton(14, 'Aux In').click();
+  await expect(editor.typeButton(14, 'Aux In')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText(/plays the Aux Input, so it takes no channels/)).toBeVisible();
+  await expect(editor.pick(5), 'picking is off').toHaveAttribute('aria-disabled', 'true');
+  await expect(editor.slider('Key 14 balance'), 'the Aux Input has a balance').toBeVisible();
+  await editor.tiles.nth(14).click();
+  await editor.typeButton(15, 'Tone').click();
+  await expect(editor.slider(/^Key 15 (pan|balance)$/), 'a tone has no pan').toHaveCount(0);
+  await expect(editor.tiles.nth(14)).toHaveAttribute('aria-label', /Tone, a 1 kHz test tone/);
+  await expect(editor.tiles.nth(13)).toHaveAttribute('aria-label', /Aux In, the Aux Input/);
+
+  const me1 = await editor.save(/Config for the ME-1/, scratch());
+  const back = parseME1Config(readFileSync(me1.path));
+  if (!back.isOk) throw new Error(`export doesn't parse back: ${JSON.stringify(back.error)}`);
+  expect(back.value.keys[13]).toMatchObject({ type: 'aux' });
+  expect(back.value.keys[14]).toMatchObject({ type: 'tone' });
+  expect(back.value.keys[15]?.type, 'the other keys are as they were').toBe('auto');
+});
+
+test('panning a key and a group member changes only their pan bytes; Centre puts one back @desktop', async ({
+  editor,
+}) => {
+  const dir = scratch();
+  const orig = readFileSync(join(FIXTURES, 'JOSEPH.ME1'));
+  await editor.openJoseph();
+  await editor.tiles.nth(2).click();
+  const pan = editor.slider('Key 3 pan');
+  await pan.focus();
+  for (let i = 0; i < 5; i++) await pan.press('ArrowLeft');
+  await expect(pan).toHaveAttribute('aria-valuetext', 'left 5');
+  await editor.button(/^Undo/).click();
+  await expect(pan, 'the presses undo in one step').toHaveAttribute('aria-valuetext', 'centre');
+  await editor.button(/^Redo/).click();
+  await expect(pan).toHaveAttribute('aria-valuetext', 'left 5');
+
+  await editor.tiles.nth(0).click();
+  const kick = editor.slider(/^Kick 1 pan in key 1$/);
+  await kick.focus();
+  await kick.press('End');
+  await expect(kick).toHaveAttribute('aria-valuetext', 'right 37');
+
+  const first = readFileSync((await editor.save(/Config for the ME-1/, dir)).path);
+  expect(differences(first, orig), 'only the two pan bytes changed').toEqual([
+    ME1_AT.sendPan(0, 0),
+    ME1_AT.pan(2),
+  ]);
+  expect([first[ME1_AT.sendPan(0, 0)], first[ME1_AT.pan(2)]]).toEqual([74, 32]);
+
+  await editor.tiles.nth(2).click();
+  await editor.button('Centre key 3 pan').click();
+  await expect(pan).toHaveAttribute('aria-valuetext', 'centre');
+  const second = readFileSync((await editor.save(/Config for the ME-1/, scratch())).path);
+  expect(differences(second, orig), "the key's pan is back as it was").toEqual([
+    ME1_AT.sendPan(0, 0),
+  ]);
+});
+
+test('muting a key marks its tile and exports only the mute bit @desktop', async ({ editor }) => {
+  await editor.openJoseph();
+  await editor.tiles.nth(2).click();
+  await expect(editor.mute(3)).toHaveAttribute('aria-pressed', 'false');
+  await editor.mute(3).click();
+  await expect(editor.mute(3)).toHaveAttribute('aria-pressed', 'true');
+  await expect(editor.tiles.nth(2), 'the tile says so').toHaveAttribute('aria-label', /muted/);
+  await expect(editor.tiles.nth(2).getByText('Muted')).toBeVisible();
+
+  const me1 = readFileSync((await editor.save(/Config for the ME-1/, scratch())).path);
+  const orig = readFileSync(join(FIXTURES, 'JOSEPH.ME1'));
+  expect(differences(me1, orig)).toEqual([ME1_AT.flags(2)]);
+  const back = parseME1Config(me1);
+  expect(back.isOk && back.value.keys[2]).toMatchObject({ type: 'channel', muted: true });
+
+  await editor.mute(3).click();
+  await expect(editor.tiles.nth(2)).not.toHaveAttribute('aria-label', /muted/);
+});
+
+test('a pan the ME-1 can’t store is explained and the problems list jumps to it @desktop', async ({
+  editor,
+  page,
+}) => {
+  await editor.fileInput.setInputFiles(josephWith({ [ME1_AT.pan(2)]: 100 }));
+  await expect(editor.configName).toHaveValue('JOSEPH');
+  await editor.button(/^1 problem/).click();
+  await editor.menuItem(/Key 3's pan must be from L 37 to R 37/).click();
+  await expect(editor.slider('Key 3 pan'), 'the problems list lands on the pan').toBeFocused();
+  await expect(
+    page
+      .getByText(/Key 3's pan must be/)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
+  await editor.button('Centre key 3 pan').click();
+  await expect(editor.button(/problem/), 'centring fixes it').toHaveCount(0);
+});
+
+test('the level fader tops out at the most an ME-1 saves @desktop', async ({ editor }) => {
+  await editor.openJoseph();
+  await editor.tiles.nth(2).click();
+  const level = editor.slider('Key 3 level');
+  await level.focus();
+  await level.press('End');
+  await expect(level).toHaveAttribute('aria-valuetext', '+9.6 dB');
+  const readout = editor.textbox('Key 3 level in dB');
+  await readout.focus();
+  await expect(readout).toBeFocused();
+  await readout.fill('10');
+  await expect(readout).toHaveValue('10');
+  await readout.press('Enter');
+  await expect(readout, 'a typed +10 is held at the top').toHaveValue('+9.6');
+  const me1 = readFileSync((await editor.save(/Config for the ME-1/, scratch())).path);
+  expect([me1[ME1_AT.level(2)], me1[ME1_AT.level(2) + 1]], 'the raw level an ME-1 saves').toEqual([
+    0xff, 0x9f,
+  ]);
+  expect(parseME1Config(me1).isOk).toBe(true);
 });
 
 test("a broken file is explained, not asked about, and the work's still there @desktop", async ({

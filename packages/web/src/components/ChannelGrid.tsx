@@ -315,7 +315,7 @@ const CSS = `
   color: var(--ink);
 }
 .ch-root .ch-grid[data-mode="one"] .ch-pick[aria-pressed="true"] { cursor: default; }
-/* Off (an Auto or unknown key): washed out, still showing which key plays what. The focus ring stays at full strength. */
+/* Off (an Auto, Aux Input, tone or unknown key): washed out, still showing which key plays what. The focus ring stays at full strength. */
 .ch-root .ch-grid[data-mode="off"] .ch-pick { cursor: not-allowed; }
 .ch-root .ch-grid[data-mode="off"] .ch-pick[data-used],
 .ch-root .ch-grid[data-mode="off"] .ch-pick[data-used]:hover { background: color-mix(in oklab, var(--k) 42%, var(--ch-under)); color: var(--ink); }
@@ -563,7 +563,8 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
 .ch-root .ch-subtitle { margin: 0; font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1.35; color: var(--muted); }
 .ch-root.ch-picker .ch-head { display: grid; gap: 2px; }
 .ch-root.ch-picker .ch-hint { flex: none; }
-.ch-root .ch-grid[data-variant="pick"] { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+/* A ring stands 4.5px off its tile, so 16px between tiles keeps two picked neighbours' rings well apart. */
+.ch-root .ch-grid[data-variant="pick"] { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .ch-root .ch-grid[data-variant="pick"] .ch-pick {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto;
   align-content: space-between; align-items: start; justify-items: start; column-gap: 4px; row-gap: 2px;
@@ -723,6 +724,20 @@ const Instruction = ({ system, index }: { system: Editable; index: number }) => 
           <KeyPill index={index} label="Auto" /> takes the next free channel, so picking is off
         </>
       );
+    case 'aux':
+      return (
+        <>
+          <KeyPill index={index} label={keyLabel(system, key)} /> plays the Aux Input, so it takes
+          no channels
+        </>
+      );
+    case 'tone':
+      return (
+        <>
+          <KeyPill index={index} label={keyLabel(system, key)} /> plays a 1 kHz tone, so it takes no
+          channels
+        </>
+      );
     default:
       return (
         <>
@@ -857,7 +872,7 @@ const Pick = ({
 }: PickProps) => {
   const id = `p${channel}`;
   const ref = useRef<TamaguiElement>(null);
-  // Off for Auto and unknown keys, but still focusable, so the hint can say why.
+  // Off for Auto, Aux Input, tone and unknown keys, but still focusable, so the hint can say why.
   // Tamagui's Button writes aria-disabled from its own `disabled`, which would
   // take the button out of reach; set the attribute on the element.
   useEffect(() => {

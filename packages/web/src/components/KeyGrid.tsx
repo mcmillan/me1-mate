@@ -39,10 +39,31 @@ const plays = (
         spoken: n === 0 ? 'no channels' : `${n} channel${n === 1 ? '' : 's'}`,
       };
     }
+    case 'aux':
+      return { text: 'Aux in', spoken: 'the Aux Input' };
+    case 'tone':
+      return { lead: '1 kHz', text: 'tone', spoken: 'a 1 kHz test tone' };
     case 'unknown':
       return { lead: 'kept', text: 'as-is', spoken: 'kept as-is' };
   }
 };
+
+/** A speaker crossed out: the tile's mark for a muted key, beside its number. */
+const MutedMark = () => (
+  <span className="kg-muted">
+    <svg width={12} height={12} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M2 6h2.5L8 3v10L4.5 10H2z" fill="currentColor" />
+      <path
+        d="M10.5 6l4 4m0-4-4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+    <span className="kg-muted-word">Muted</span>
+  </span>
+);
 
 type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -284,6 +305,29 @@ const CSS = `
 }
 .kg-tile[data-kind="unknown"] .kg-meter { background-color: var(--line); }
 /*
+ * The top line: the number, and for a muted key a crossed-out speaker and the
+ * word, on a faint backing (the word goes on the narrowest tiles). A muted
+ * key's meter is struck through: its level is kept but nothing is heard.
+ */
+.kg-tile .kg-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-inline-size: 0; }
+.kg-tile .kg-muted {
+  display: inline-flex; align-items: center; gap: 3px; min-inline-size: 0; padding: 1px 6px 1px 4px;
+  border-radius: 999px; background-color: rgb(19 19 22 / 0.14);
+  font-size: 0.6875rem; line-height: 1.2; font-weight: var(--w-strong); white-space: nowrap;
+}
+.kg-tile .kg-muted svg { flex: none; }
+.kg-tile[data-muted] .kg-meter-fill {
+  opacity: 0.4;
+  background-image: repeating-linear-gradient(-45deg, transparent 0 2px, rgb(19 19 22 / 0.5) 2px 4px);
+}
+@container kg-tile (inline-size < 72px) {
+  .kg-tile .kg-muted-word { display: none; }
+  .kg-tile .kg-muted { padding-inline: 3px; }
+}
+@media (forced-colors: active) {
+  .kg-tile .kg-muted { border: 1px solid CanvasText; }
+}
+/*
  * An open slot: its number and a plus, both quiet, so the keys that play
  * something are what the eye finds. Pointed at or selected, the plus sits on
  * the colour the key would get.
@@ -351,17 +395,26 @@ const CSS = `
 
 /*
  * The phone's home screen (\`opens\`, App.tsx): the region's title is said by
- * the Keys | Channels switch above it, so it is left to screen readers, and
- * the tiles grow to share the window's height, so the 16 keys fill the
- * screen without scrolling it.
+ * the Keys | Channels switch above it, so it is left to screen readers. The
+ * panel takes the height the page leaves it (styles.css) and the rows share
+ * it equally, so the 16 keys fill the screen without scrolling it, four by
+ * four upright and the ME-1's two rows of eight on its side.
  */
 .kg-panel[data-opens] .kg-title, .kg-sr {
   position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
-.kg-panel[data-opens] .kg-grid .kg-tile {
-  min-block-size: clamp(88px, calc((100dvh - var(--phone-chrome, 176px)) / 4), 150px);
+.kg-panel[data-opens], .kg-panel[data-opens] .kg-box {
+  flex: 1 1 0; min-block-size: 0; align-self: stretch; display: flex; flex-direction: column;
 }
+.kg-panel[data-opens] .kg-rows { flex: 1 1 0; min-block-size: 0; grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.kg-panel[data-opens] .kg-grid { grid-auto-rows: minmax(0, 1fr); }
+.kg-panel[data-opens] .kg-grid .kg-tile { min-block-size: 76px; }
 .kg-panel[data-opens] .kg-tile .kg-label { --kg-full: clamp(1.3125rem, 24cqi, 2rem); }
+@media (orientation: landscape) {
+  .kg-panel[data-opens] .kg-rows { gap: 10px; }
+  .kg-panel[data-opens] .kg-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  .kg-panel[data-opens] .kg-grid .kg-tile { min-block-size: 64px; padding: 7px 8px 8px; }
+}
 
 /* A tile too narrow for "Ch 29+30" says "29+30". */
 @container kg-tile (inline-size < 56px) {
@@ -400,11 +453,13 @@ const Tile = ({
   const playing = plays(system, key);
   const level = empty ? undefined : levelText(key.level);
   const position = empty ? 0 : levelPosition(key.level ?? 0);
+  const muted = 'muted' in key && key.muted === true;
   const name = [
     `Key ${index + 1}: ${empty ? 'unassigned' : label}`,
     empty ? undefined : KEY_TYPE_LABEL[key.type],
     playing?.spoken,
     level,
+    muted ? 'muted' : undefined,
     problems > 0 ? `${problems} problem${problems === 1 ? '' : 's'}` : undefined,
   ]
     .filter(Boolean)
@@ -420,6 +475,7 @@ const Tile = ({
       aria-describedby={opens ? 'kg-opens' : undefined}
       tabIndex={selected ? 0 : -1}
       data-kind={empty ? 'empty' : key.type}
+      data-muted={muted ? '' : undefined}
       data-highlight={highlighted ? '' : undefined}
       onPress={onSelect}
       onKeyDown={onKeyDown}
@@ -434,7 +490,10 @@ const Tile = ({
     >
       <span className="kg-ring" />
       <span className="kg-point" />
-      <span className="kg-num">{String(index + 1).padStart(2, '0')}</span>
+      <span className="kg-top">
+        <span className="kg-num">{String(index + 1).padStart(2, '0')}</span>
+        {muted && <MutedMark />}
+      </span>
       {empty ? (
         <span className="kg-plus">
           <span>+</span>

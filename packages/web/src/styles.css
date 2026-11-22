@@ -171,21 +171,40 @@ html {
 }
 
 /*
- * The phone layout (below 700px, `PHONE_QUERY` in lib/layout.ts): one screen
- * at a time under the top bar, the keys or the channels; a key opens in a
- * sheet (KeySheet.tsx). `--phone-chrome` is what the key screen's tiles leave
- * of the window's height for everything else (the bar, the switch, the gaps),
- * so the 16 keys fill the rest without scrolling.
+ * The phone layout (below 700px, or a phone on its side: `PHONE_QUERY` in
+ * lib/layout.ts): one screen at a time under the top bar, the keys or the
+ * channels; a key opens in a sheet (KeySheet.tsx). Clear of the notch and the
+ * home indicator (the safe-area insets).
  */
 .workspace[data-layout="phone"] {
-  --phone-chrome: 172px;
   display: block;
-  padding: 6px 12px 16px;
+  padding: 6px max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
 }
 @media (min-width: 640px) {
   .workspace[data-layout="phone"] {
-    padding-inline: 20px;
+    padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right));
   }
+}
+/*
+ * The key screen is exactly the window's height (dvh, so it follows the
+ * browser's bars): the page is a column of the top bar and then the keys,
+ * which take all that's left, so the 16 keys fill the screen at any phone
+ * size without scrolling (KeyGrid.tsx shares the height between the rows).
+ */
+#root:has(.kg-panel[data-opens]) {
+  display: flex;
+  flex-direction: column;
+  block-size: 100dvh;
+}
+#root:has(.kg-panel[data-opens]) main,
+.workspace[data-layout="phone"]:has(.kg-panel[data-opens]),
+.workspace[data-layout="phone"] .workspace-keys {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-block-size: 0;
+  align-self: stretch;
 }
 
 @media (min-width: 640px) {

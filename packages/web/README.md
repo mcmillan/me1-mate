@@ -35,9 +35,26 @@ the same parts arranged for its screen; see below):
   one group, so picking it for another group moves it. A chip takes the colour
   of the key that plays it; open chips are channels no key uses. Pointing at a
   key fades the channels it doesn't play.
-- **Inspector**: the selected key's type, label and level, and for a group a
-  level for each of its channels. It stays in view beside the keys and
-  channels on a wide screen and sits between them on a narrow one.
+- **Inspector**: the selected key's type (Empty, Channel, Group, Auto, Aux In
+  or Tone, three to a row), label, level and mute, its pan, and for a group a
+  level and pan for each of its channels. Aux In is the ME-1's rear-panel
+  stereo Aux Input and Tone its 1 kHz test tone; neither takes channels, so
+  picking is off for them. Switching type keeps what the new type also has
+  (label, level, mute, and pan between a channel key and Aux In). It stays in
+  view beside the keys and channels on a wide screen and sits between them on
+  a narrow one.
+- **Pan**: a slider over the ME-1's own pan steps (0 hard left, 37 centre, 74
+  hard right), called Balance on a stereo pair and on Aux In. Its readout
+  counts steps from the centre, `L 12`, `C`, `R 30`: the steps are the
+  ME-1's, but showing them that way is this editor's choice, not something
+  read from the ME-1's screen. Double-click the thumb, press `C`, or use
+  Centre to centre it. A tone and a group's master have no pan.
+- **Level**: the fader runs from off to the most an ME-1 saves (+9.6 dB on
+  this scale, the top of its bar), so nothing it writes is beyond what the
+  hardware writes.
+- **Mute**: a toggle beside the level; a muted key's tile shows a crossed-out
+  speaker (and the word where there's room) and says "muted" to screen
+  readers.
 - **Top bar**: the wordmark (back to Home), the config's name (the `.ME1`
   file's name), a `?` that starts the tour, undo and redo (⌘Z / ⇧⌘Z), Open,
   New, whether the system is ready to export, and Export.
@@ -59,16 +76,18 @@ the same parts arranged for its screen; see below):
   file: exporting only the `.ME1` doesn't hide unsaved channel names, and
   undoing back to where you started isn't unsaved work.
 
-**On a phone** (narrower than 700px) the editor is the same parts, arranged
-so nothing is a long scroll away:
+**On a phone** (narrower than 700px, or a touch screen under 500px tall, a
+phone on its side) the editor is the same parts, arranged so nothing is a
+long scroll away:
 
-- **The key screen** is home: the 16 keys fill the screen, with no scrolling.
-  Tap a key to open it.
+- **The key screen** is home: the 16 keys fill the screen exactly, with no
+  scrolling, four by four upright and two rows of eight on its side. Tap a
+  key to open it.
 - **The key sheet** rises from the bottom and nearly fills the screen, with
   everything about that key in one place: its colour, number, type and label
   at the top (which stays put while the rest scrolls), ‹ › to step to the
-  keys either side, and Done; then its type, label and level, a group's
-  channels and their levels; and then the channel picker, a tile per channel
+  keys either side, and Done; then its type, label, level, mute and pan, a
+  group's channels with their levels and pans; and then the channel picker, a tile per channel
   (two to a pair), in the colour of the key that plays it and with that key's
   number, ringed where the open key plays it. Picking works as in Channels.
   Done, Escape, the back gesture or a tap on the strip above close it, and
@@ -176,10 +195,10 @@ src
 │   ├── ScreenTabs.tsx   the phone's Keys | Channels switch (a tablist)
 │   ├── KeySheet.tsx     the phone's key sheet (native <dialog>): the inspector and channel picker
 │   ├── Wordmark.tsx     the ME-1 Mate logo, ME-1 on an orange plate
-│   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout
+│   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout (4×4 filling an upright phone)
 │   ├── Inspector.tsx    editor for the selected key (also the key sheet's body)
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key (all, or the phone's pick or names part)
-│   ├── Fader.tsx        level fader (a native range input on the fader law)
+│   ├── Fader.tsx        level fader (a native range input on the fader law) and the pan control
 │   ├── Tour.tsx         the guided walk through the editor
 │   ├── OpenFiles.tsx, WindowDrop.tsx              opening and dropping files
 │   ├── LoadNotice.tsx, Notice.tsx                 files that couldn't be opened

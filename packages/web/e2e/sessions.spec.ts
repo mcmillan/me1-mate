@@ -26,6 +26,28 @@ test('sessions are kept as you go, listed on Home and reopened @desktop', async 
   await expect(editor.unsaved, 'and it is still unsaved').toBeVisible();
 });
 
+test('a session brings back pan, mute and Aux In keys @desktop', async ({ editor, page }) => {
+  await editor.openJoseph();
+  await editor.tiles.nth(2).click();
+  await editor.mute(3).click();
+  const pan = editor.slider('Key 3 pan');
+  await pan.focus();
+  await pan.press('Home');
+  await editor.tiles.nth(13).click();
+  await editor.typeButton(14, 'Aux In').click();
+  await page.waitForTimeout(800);
+  await page.reload();
+  await editor.sessions
+    .getByRole('button', { name: /^Open JOSEPH/ })
+    .first()
+    .click();
+  await expect(editor.tiles.nth(2)).toHaveAttribute('aria-label', /muted/);
+  await expect(editor.tiles.nth(13)).toHaveAttribute('aria-label', /Aux In/);
+  await editor.tiles.nth(2).click();
+  await expect(editor.mute(3)).toHaveAttribute('aria-pressed', 'true');
+  await expect(editor.slider('Key 3 pan')).toHaveAttribute('aria-valuetext', 'left 37');
+});
+
 test('New starts at once and keeps the old session; a session can be deleted @desktop', async ({
   editor,
   page,

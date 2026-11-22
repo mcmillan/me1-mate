@@ -74,7 +74,8 @@ The bar runs from off through `0` to +10. The ME-1 stores 1/256 dB steps, so
 a level read from a file can be `-0.37890625`; anything you write is rounded
 to the nearest step. The highest level an ME-1 has been seen to save is
 `+9.62109375`, short of the guide's +10, so the dB scale is a close
-estimate rather than a measurement.
+estimate rather than a measurement. `LEVEL_MAX` is that level, and
+`LEVEL_MIN` the lowest above `'off'`.
 
 Pan is the ME-1's own step, from `PAN_MIN` (`0`, hard left) through
 `PAN_CENTRE` (`37`) to `PAN_MAX` (`74`, hard right); these were read
@@ -135,7 +136,8 @@ Both build functions check the draft before encoding:
 - Both channels of a pair are stereo or neither (setting `stereo` on either channel of a pair in a draft marks both).
 - A channel is in at most one group.
 - Key names: 1–6 of `0-9 A-Z a-z` and space. Channel names: up to 6 characters.
-- Levels are `'off'` or within the bar's range; pan is a whole number
+- Levels are `'off'` or `LEVEL_MIN`–`LEVEL_MAX` (nothing above what an ME-1
+  saves); pan is a whole number
   `PAN_MIN`–`PAN_MAX` (an `unknown` key's raw pan is a byte); `muted` is a
   boolean.
 
@@ -143,7 +145,7 @@ Both build functions check the draft before encoding:
 buildME1Config({ keys: [{ type: 'channel', channel: 99, level: 50 }] });
 // Err([
 //   { path: 'keys[0].channel', reason: 'channel must be 1–40' },
-//   { path: 'keys[0].level',   reason: "level must be 'off' or -118.00…10 dB" },
+//   { path: 'keys[0].level',   reason: "level must be 'off' or -117.99…9.62 dB" },
 // ])
 ```
 

@@ -1,16 +1,19 @@
 /**
- * The phone layout. Below `PHONE_QUERY` the editor isn't one page: the key
+ * The phone layout. Matching `PHONE_QUERY` the editor isn't one page: the key
  * grid is the home screen, a key opens in a sheet (`keySheetOpenAtom` in the
  * store) with its channel picker, and channels are named on a screen of their
- * own (`phoneScreenAtom`). From that width up the editor is the one page it
- * has always been. The components are the same in both; this only says which
+ * own (`phoneScreenAtom`). Otherwise the editor is the one page it has always
+ * been. The components are the same in both; this only says which
  * arrangement is showing.
  */
 
 import { useSyncExternalStore } from 'react';
 
-/** Narrower than this, the editor uses the phone layout. Keep in step with styles.css. */
-export const PHONE_QUERY = '(max-width: 699.98px)';
+/**
+ * Narrower than 700px, or a touch screen shorter than 500px (a phone on its
+ * side), the editor uses the phone layout. Keep in step with styles.css.
+ */
+export const PHONE_QUERY = '(max-width: 699.98px), (max-height: 499.98px) and (pointer: coarse)';
 
 const query = (): MediaQueryList | undefined =>
   typeof window === 'undefined' ? undefined : window.matchMedia(PHONE_QUERY);

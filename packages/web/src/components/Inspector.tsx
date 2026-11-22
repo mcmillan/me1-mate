@@ -11,21 +11,28 @@ import {
 } from 'react';
 import { Input, SizableText, type TamaguiElement, Theme, XStack } from 'tamagui';
 import {
+  canMute,
   type Editable,
   type EditableKeyType,
+  hasPan,
+  isBalance,
   isStereo,
   keyLabel,
   levelText,
   pairStart,
+  pickTarget,
   setKeyLevel,
+  setKeyMuted,
   setKeyName,
+  setKeyPan,
   setKeyType,
   setMemberLevel,
+  setMemberPan,
   toggleMember,
 } from '../lib/edit.ts';
 import { editAtom, selectedKeyAtom, systemAtom } from '../lib/store.ts';
 import { KEY_TYPE_LABEL, keyStyle } from '../lib/theme.ts';
-import { Fader } from './Fader.tsx';
+import { Fader, Pan } from './Fader.tsx';
 import { FieldError, useTextFieldError, WarningIcon } from './FieldError.tsx';
 import { Action, Card } from './ui.tsx';
 
@@ -119,17 +126,22 @@ const CSS = `
 .insp-plays { gap: 6px; }
 .insp-plays .insp-make { justify-self: start; margin-block-start: 6px; }
 
-/* The type switch: a pill of four on a well; the pressed one is an ink pill that slides between them. */
+/*
+ * The type switch: six on a well, three to a row (what a key plays from the
+ * channels, then what it plays by itself), so each word has room even on a
+ * phone. The pressed one is an ink pill that slides between them.
+ */
 .insp-type {
-  position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
-  padding: 4px; border-radius: 999px; background: var(--well);
+  position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+  padding: 4px; border-radius: 20px; background: var(--well);
 }
 .insp-pill {
-  position: absolute; inset-block: 4px; inset-inline-start: 4px; inline-size: calc((100% - 20px) / 4);
+  position: absolute; inset-block-start: 4px; inset-inline-start: 4px;
+  inline-size: calc((100% - 16px) / 3); block-size: calc((100% - 12px) / 2);
   border-radius: 999px; background: var(--ink); pointer-events: none;
-  translate: calc(var(--insp-at) * (100% + 4px)) 0;
+  translate: calc(var(--insp-col) * (100% + 4px)) calc(var(--insp-row) * (100% + 4px));
 }
-.insp-pill:dir(rtl) { translate: calc(var(--insp-at) * (-100% - 4px)) 0; }
+.insp-pill:dir(rtl) { translate: calc(var(--insp-col) * (-100% - 4px)) calc(var(--insp-row) * (100% + 4px)); }
 .insp-pill[data-off] { opacity: 0; }
 .insp .insp-seg {
   position: relative; min-inline-size: 0; block-size: max(30px, var(--target)); min-block-size: 0;
@@ -140,6 +152,22 @@ const CSS = `
 .insp .insp-seg:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
 .insp .insp-seg:active { background: color-mix(in oklab, var(--ink) 14%, transparent); }
 .insp .insp-seg[aria-pressed="true"] { background: transparent; color: var(--canvas); }
+
+/* Mute, beside the level's label: an outlined pill; pressed, an ink one with the speaker crossed out. */
+.insp-level-head { align-items: center; }
+.insp .insp-mute {
+  block-size: max(28px, var(--target)); min-block-size: 0; gap: 5px; border-radius: 999px;
+  background: transparent; color: var(--ink); opacity: 1;
+  font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1;
+  &&&& { padding: 0 11px 0 9px; border: 1.5px solid var(--line); }
+}
+@media (hover: hover) {
+  .insp .insp-mute:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+}
+.insp .insp-mute[aria-pressed="true"] { background: var(--ink); color: var(--canvas); &&&& { border-color: var(--ink); } }
+@media (forced-colors: active) {
+  .insp .insp-mute[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+}
 
 /* A field: a small quiet label, a quieter hint on the same row, the control, then its problem. */
 .insp-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
@@ -182,11 +210,21 @@ const CSS = `
  * beside its level; the number is quiet, and the way out is faint until the
  * row is pointed at or holds focus (full strength where there is no hover).
  */
+/*
+ * Each row is two lines on one grid: the name, the pair's second number, the
+ * level fader with its readout, and the way out, in a column of its own so it
+ * never covers the readout; then the pan under them, from the number's column.
+ * Rows are parted by a hairline.
+ */
 .insp-members { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none; }
-.insp-row-main {
-  display: grid; grid-template-columns: 56px 40px minmax(0, 1fr) auto; align-items: center; column-gap: 6px;
-  min-block-size: max(32px, var(--target));
+.insp-row { --insp-row-x: max(24px, var(--target)); padding-block: 4px 6px; }
+.insp-row + .insp-row { border-block-start: 1px solid var(--line); }
+.insp-row-main, .insp-row-pan {
+  display: grid; grid-template-columns: 56px 40px minmax(0, 1fr) var(--insp-row-x); align-items: center; column-gap: 6px;
 }
+.insp-row-main { min-block-size: max(32px, var(--target)); }
+.insp-row-pan > .insp-row-num { grid-column: 1; }
+.insp-row-pan > .fader-root { grid-column: 2 / 4; }
 .insp-row-name {
   font-size: 0.84375rem; font-weight: var(--w-ui); line-height: 1.2;
   white-space: nowrap; overflow-x: clip; text-overflow: ellipsis;
@@ -195,7 +233,7 @@ const CSS = `
 .insp-row-num { font-size: 0.75rem; font-weight: var(--w-text); line-height: 1.2; color: var(--muted); white-space: nowrap; }
 .insp .insp-remove {
   inline-size: max(24px, var(--target)); block-size: max(24px, var(--target)); min-block-size: 0;
-  margin-inline: -2px -6px; border-radius: 999px; background: transparent; color: var(--muted); opacity: 1;
+  border-radius: 999px; background: transparent; color: var(--muted); opacity: 1;
   font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1;
   &&&& { padding: 0; border: 0; }
 }
@@ -322,12 +360,9 @@ const CSS = `
 
 const NATIVE_FOCUSGROUP = 'focusGroup' in HTMLElement.prototype;
 
-const TYPES: readonly (readonly [type: EditableKeyType, label: string])[] = [
-  ['unassigned', 'Empty'],
-  ['channel', 'Channel'],
-  ['group', 'Group'],
-  ['auto', 'Auto'],
-];
+/** The type switch's buttons, in reading order: three to a row. */
+const TYPES: readonly EditableKeyType[] = ['unassigned', 'channel', 'group', 'auto', 'aux', 'tone'];
+const TYPE_COLUMNS = 3;
 
 const Chevron = ({ back = false }: { readonly back?: boolean }) => (
   <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -410,17 +445,19 @@ const spokenName = (system: Editable, channel: number): string =>
 const summary = (system: Editable, key: Key, named: boolean): string => {
   // Said where the big label is a stand-in (an unnamed group, a channel number) and not what the ME-1 shows.
   const standIn = named ? [] : ['no label'];
+  const muted = 'muted' in key && key.muted ? ['muted'] : [];
   switch (key.type) {
     case 'unassigned':
       return 'no channel assigned';
     case 'auto':
-      return ['next free channel', levelText(key.level)].join(' · ');
+      return ['next free channel', levelText(key.level), ...muted].join(' · ');
     case 'channel':
       return [
         `Ch ${numbersOf(system, key.channel)}`,
         system.channels[key.channel - 1]?.name,
         ...standIn,
         levelText(key.level),
+        ...muted,
       ]
         .filter(Boolean)
         .join(' · ');
@@ -430,12 +467,13 @@ const summary = (system: Editable, key: Key, named: boolean): string => {
         ...standIn,
         count === 0 ? 'no channels yet' : `${count} channel${count === 1 ? '' : 's'}`,
         levelText(key.level),
+        ...muted,
       ].join(' · ');
     }
     case 'aux':
-      return ['Aux Input', ...standIn, levelText(key.level)].join(' · ');
+      return ['Aux in', ...standIn, levelText(key.level), ...muted].join(' · ');
     case 'tone':
-      return ['test tone', ...standIn, levelText(key.level)].join(' · ');
+      return ['1 kHz tone', ...standIn, levelText(key.level), ...muted].join(' · ');
     case 'unknown':
       return [...standIn, 'kept as it is'].join(' · ');
   }
@@ -469,7 +507,11 @@ const Hero = ({
   const named =
     key.type === 'channel'
       ? Boolean(key.name || system.channels[key.channel - 1]?.name)
-      : (key.type === 'group' || key.type === 'unknown') && Boolean(key.name);
+      : (key.type === 'group' ||
+          key.type === 'aux' ||
+          key.type === 'tone' ||
+          key.type === 'unknown') &&
+        Boolean(key.name);
   const label = empty ? 'Empty' : keyLabel(system, key);
   return (
     <div className="insp-hero" data-plain={plain ? '' : undefined}>
@@ -518,9 +560,10 @@ const Hero = ({
 };
 
 /**
- * The key's type: four toggle buttons that are one stop in the Tab order. Tab
- * lands on the pressed one (the first, for a type that isn't offered); Left
- * and Right, Home and End move between them, and Space or Enter chooses.
+ * The key's type: six toggle buttons, three to a row, that are one stop in
+ * the Tab order. Tab lands on the pressed one (the first, for a type that
+ * isn't offered); Left and Right (wrapping from one row to the next), Home
+ * and End move between them, and Space or Enter chooses.
  *
  * `focusgroup` does this where the browser has it (`nomemory`, so the way in
  * is always the pressed button, marked `focusgroupstart`). Elsewhere a roving
@@ -532,8 +575,8 @@ const Hero = ({
 const TypeSwitch = ({ index, type }: { index: number; type: Key['type'] }) => {
   const edit = useSetAtom(editAtom);
   const [focused, setFocused] = useState<EditableKeyType | null>(null);
-  const at = TYPES.findIndex(([t]) => t === type);
-  const pressed = TYPES[at]?.[0] ?? 'unassigned';
+  const at = TYPES.indexOf(type as EditableKeyType);
+  const pressed = TYPES[at] ?? 'unassigned';
   const stop = focused ?? pressed;
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -573,9 +616,14 @@ const TypeSwitch = ({ index, type }: { index: number; type: Key['type'] }) => {
         className="insp-pill"
         aria-hidden="true"
         data-off={at < 0 ? '' : undefined}
-        style={{ '--insp-at': Math.max(at, 0) } as CSSProperties}
+        style={
+          {
+            '--insp-col': Math.max(at, 0) % TYPE_COLUMNS,
+            '--insp-row': Math.floor(Math.max(at, 0) / TYPE_COLUMNS),
+          } as CSSProperties
+        }
       />
-      {TYPES.map(([t, label]) => (
+      {TYPES.map((t) => (
         <Action
           key={t}
           className="insp-seg"
@@ -586,7 +634,7 @@ const TypeSwitch = ({ index, type }: { index: number; type: Key['type'] }) => {
             : { tabIndex: t === stop ? 0 : -1, onFocus: () => setFocused(t) })}
           onPress={() => edit((s) => setKeyType(s, index, t))}
         >
-          <span>{label}</span>
+          <span>{KEY_TYPE_LABEL[t]}</span>
         </Action>
       ))}
     </XStack>
@@ -662,13 +710,52 @@ const LabelField = ({
   );
 };
 
+const SpeakerIcon = ({ muted }: { readonly muted: boolean }) => (
+  <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+    <path d="M2 6h2.5L8 3v10L4.5 10H2z" fill="currentColor" />
+    <path
+      d={muted ? 'M10.5 6l4 4m0-4-4 4' : 'M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9'}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+/**
+ * Mute: a toggle button (`aria-pressed`), named "Mute" whichever way it is;
+ * pressed, it's an ink pill with a crossed-out speaker.
+ */
+const MuteToggle = ({ index, muted }: { index: number; muted: boolean }) => {
+  const edit = useSetAtom(editAtom);
+  const path = `keys[${index}].muted`;
+  return (
+    <Action
+      className="insp-mute target"
+      kind="ghost"
+      aria-pressed={muted}
+      aria-label={`Mute key ${index + 1}`}
+      data-issue-path={path}
+      onPress={() => edit((s) => setKeyMuted(s, index, !muted))}
+    >
+      <SpeakerIcon muted={muted} />
+      <span>Mute</span>
+    </Action>
+  );
+};
+
 const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) => {
   const edit = useSetAtom(editAtom);
-  if (key.type === 'unassigned' || key.type === 'unknown') return null;
+  if (!canMute(key)) return null;
   const path = `keys[${index}].level`;
   const master = key.type === 'group';
   return (
-    <Field label={master ? 'Master level' : 'Level'} error={<FieldError path={path} />}>
+    <div className="insp-field">
+      <div className="insp-field-head insp-level-head">
+        <span className="insp-label">{master ? 'Master level' : 'Level'}</span>
+        <MuteToggle index={index} muted={key.muted === true} />
+      </div>
       <div data-issue-path={path}>
         <Fader
           value={key.level}
@@ -676,6 +763,32 @@ const LevelField = ({ index, keyValue: key }: { index: number; keyValue: Key }) 
             edit((s) => setKeyLevel(s, index, level), merge ? path : undefined)
           }
           label={`Key ${index + 1} ${master ? 'master level' : 'level'}`}
+        />
+      </div>
+      <FieldError path={path} />
+    </div>
+  );
+};
+
+/**
+ * A channel or Aux Input key's pan, called Balance where the key plays a
+ * stereo pair or the Aux Input (the ME-1's pan control is a balance there).
+ */
+const PanField = ({ index, keyValue: key }: { index: number; keyValue: Key }) => {
+  const system = useAtomValue(systemAtom);
+  const edit = useSetAtom(editAtom);
+  if (!hasPan(key)) return null;
+  const path = `keys[${index}].pan`;
+  const balance = isBalance(system, key);
+  return (
+    <Field label={balance ? 'Balance' : 'Pan'} error={<FieldError path={path} />}>
+      <div data-issue-path={path}>
+        <Pan
+          value={key.pan}
+          onChange={(pan, { merge }) =>
+            edit((s) => setKeyPan(s, index, pan), merge ? path : undefined)
+          }
+          label={`Key ${index + 1} ${balance ? 'balance' : 'pan'}`}
         />
       </div>
     </Field>
@@ -771,7 +884,7 @@ const PlaysGroup = ({
           Channels
           {members.length > 0 && <small>{` · ${members.length}`}</small>}
         </Sub>
-        {members.length > 0 && <Hint>Level in the group, dB</Hint>}
+        {members.length > 0 && <Hint>Level and pan in the group</Hint>}
       </div>
       {members.length === 0 ? (
         <div className="insp-invite" data-key="">
@@ -790,6 +903,7 @@ const PlaysGroup = ({
             const name = system.channels[m.channel - 1]?.name;
             const numbers = numbersOf(system, m.channel);
             const spoken = spokenName(system, m.channel);
+            const stereo = isStereo(system, pickTarget(system, m.channel));
             const path = `keys[${index}].members[${j}]`;
             return (
               <li key={m.channel} className="insp-row" data-issue-path={path}>
@@ -833,6 +947,21 @@ const PlaysGroup = ({
                   >
                     <span aria-hidden="true">✕</span>
                   </Action>
+                </div>
+                <div className="insp-row-pan" data-issue-path={`${path}.pan`}>
+                  <span className="insp-row-num" aria-hidden="true">
+                    {stereo ? 'Balance' : 'Pan'}
+                  </span>
+                  <Pan
+                    value={m.pan}
+                    onChange={(pan, { merge }) =>
+                      edit(
+                        (s) => setMemberPan(s, index, m.channel, pan),
+                        merge ? `${path}.pan` : undefined,
+                      )
+                    }
+                    label={`${spoken} ${stereo ? 'balance' : 'pan'} in key ${n}`}
+                  />
                 </div>
                 <FieldError path={path} />
               </li>
@@ -923,8 +1052,8 @@ export const Inspector = ({
                   <WarningIcon />
                 </SizableText>
                 <SizableText size="sm" color="color-11">
-                  A source this editor doesn’t cover, such as Aux Input; it’s kept as-is. Choose a
-                  type to reset it.
+                  A source or setting this editor doesn’t know yet; it’s kept as-is. Choose a type
+                  to reset it.
                 </SizableText>
               </XStack>
             </Theme>
@@ -932,25 +1061,26 @@ export const Inspector = ({
           </div>
         )}
 
-        {(key.type === 'auto' || key.type === 'channel' || key.type === 'group') && (
+        {canMute(key) && (
           <div key={`fields-${index}`} className="insp-fields">
             {key.type !== 'auto' && (
               <LabelField
                 index={index}
                 value={key.name ?? ''}
                 placeholder={
-                  key.type === 'group'
-                    ? 'Group'
-                    : system.channels[key.channel - 1]?.name || String(key.channel)
+                  key.type === 'channel'
+                    ? system.channels[key.channel - 1]?.name || String(key.channel)
+                    : KEY_TYPE_LABEL[key.type]
                 }
                 hint={
-                  key.type === 'group'
-                    ? 'Up to 6 letters, numbers or spaces'
-                    : 'Leave empty to show the channel name'
+                  key.type === 'channel'
+                    ? 'Leave empty to show the channel name'
+                    : 'Up to 6 letters, numbers or spaces'
                 }
               />
             )}
             <LevelField index={index} keyValue={key} />
+            <PanField index={index} keyValue={key} />
           </div>
         )}
 
@@ -959,6 +1089,26 @@ export const Inspector = ({
             <Sub>Plays</Sub>
             <p className="insp-copy">
               Auto takes the first channel that no other key or group uses.
+            </p>
+          </div>
+        )}
+
+        {key.type === 'aux' && (
+          <div className="insp-plays">
+            <Sub>Plays</Sub>
+            <p className="insp-copy">
+              The ME-1’s Aux Input, the stereo socket on its back panel, for a click or a player. It
+              takes no channels.
+            </p>
+          </div>
+        )}
+
+        {key.type === 'tone' && (
+          <div className="insp-plays">
+            <Sub>Plays</Sub>
+            <p className="insp-copy">
+              A 1 kHz test tone from the ME-1 itself, for checking the outputs. It takes no
+              channels.
             </p>
           </div>
         )}

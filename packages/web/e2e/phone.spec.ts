@@ -2,7 +2,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseConfig } from '@mcmillan/me1-mate-core';
 import type { Page } from '@playwright/test';
-import { expect, FIXTURES, fits, JOSEPH, scratch, test } from './helpers.ts';
+import {
+  differences,
+  expect,
+  FIXTURES,
+  fits,
+  JOSEPH,
+  josephWith,
+  ME1_AT,
+  scratch,
+  test,
+} from './helpers.ts';
 
 /**
  * The phone layout: the key grid is the home screen, a key opens in a sheet
@@ -228,6 +238,95 @@ test('the key screen fits the window and no screen runs on past its end @touch',
   expect(sheet.bottom, 'the sheet reaches the bottom of the window').toBeCloseTo(sheet.vh, 0);
   expect(sheet.top, 'and nearly the top').toBeLessThan(60);
   expect(sheet.below, 'it ends with its last channel').toBeLessThan(60);
+});
+
+/** How far the key grid ends above the bottom of the window, and whether the page scrolls. */
+const keyScreen = (page: Page) =>
+  page.evaluate(() => {
+    const grid = document.querySelector('.kg-rows')?.getBoundingClientRect();
+    return {
+      gap: innerHeight - (grid?.bottom ?? 0),
+      scrolls: document.documentElement.scrollHeight > innerHeight,
+    };
+  });
+
+test('the key screen fills the window, upright and on its side @touch', async ({
+  editor,
+  page,
+}) => {
+  await editor.openJoseph();
+  const upright = page.viewportSize();
+  if (!upright) throw new Error('no viewport');
+  const tall = await keyScreen(page);
+  expect(tall.scrolls, 'upright, nothing scrolls').toBe(false);
+  expect(tall.gap, 'upright, the keys reach the foot of the window').toBeLessThanOrEqual(16);
+
+  await page.setViewportSize({ width: upright.height, height: upright.width });
+  await expect(editor.screenTab('Keys'), 'on its side it is still the phone layout').toBeVisible();
+  const wide = await keyScreen(page);
+  expect(wide.scrolls, 'on its side, nothing scrolls').toBe(false);
+  expect(wide.gap, 'on its side, the keys reach the foot too').toBeLessThanOrEqual(16);
+  const rows = await editor.tiles.evaluateAll(
+    (tiles) => new Set(tiles.map((t) => t.getBoundingClientRect().top)).size,
+  );
+  expect(rows, 'two rows of eight, as on the ME-1').toBe(2);
+});
+
+test('the key sheet offers Aux In, Tone, a balance, member pans and mute @touch', async ({
+  editor,
+  page,
+}) => {
+  const orig = readFileSync(join(FIXTURES, 'JOSEPH.ME1'));
+  await editor.openJoseph();
+  const { tiles, sheet } = editor;
+
+  await tiles.nth(13).click();
+  await editor.typeButton(14, 'Aux In').click();
+  await expect(sheet.getByText(/plays the Aux Input, so it takes no channels/)).toBeVisible();
+  await editor.mute(14).click();
+  await expect(editor.mute(14)).toHaveAttribute('aria-pressed', 'true');
+  const balance = editor.slider('Key 14 balance');
+  await balance.focus();
+  for (let i = 0; i < 3; i++) await balance.press('ArrowRight');
+  await expect(balance).toHaveAttribute('aria-valuetext', 'right 3');
+  await sheet.getByRole('button', { name: 'Next key' }).click();
+  await editor.typeButton(15, 'Tone').click();
+  await expect(editor.slider(/^Key 15 (pan|balance)$/)).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(tiles.nth(13)).toHaveAttribute('aria-label', /Aux In, the Aux Input.*muted/);
+  await expect(tiles.nth(14)).toHaveAttribute('aria-label', /Tone/);
+
+  await tiles.nth(0).click();
+  const snare = editor.slider(/^Snare 2 pan in key 1$/);
+  await snare.focus();
+  await snare.press('Home');
+  await expect(snare).toHaveAttribute('aria-valuetext', 'left 37');
+  const centre = sheet.getByRole('button', { name: /^Centre snare 2 pan/ });
+  await expect(centre, 'Centre shows at rest where there is no hover').toBeVisible();
+  await snare.press('ArrowRight');
+  await expect(snare).toHaveAttribute('aria-valuetext', 'left 36');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+
+  const me1 = readFileSync((await editor.save(/Config for the ME-1/, scratch())).path);
+  const back = parseConfig({ me1, meu: readFileSync(join(FIXTURES, 'JOSEPH.meu'), 'utf8') });
+  if (!back.isOk) throw new Error(`export doesn't parse back: ${JSON.stringify(back.error)}`);
+  expect(back.value.keys[13]).toMatchObject({ type: 'aux', pan: 40, muted: true });
+  expect(back.value.keys[14]).toMatchObject({ type: 'tone' });
+  expect(me1[ME1_AT.sendPan(0, 1)], "the snare's pan").toBe(1);
+  expect(
+    differences(me1, orig).filter((i) => i < ME1_AT.flags(13)),
+    'keys 1–13 change only in the snare pan',
+  ).toEqual([ME1_AT.sendPan(0, 1)]);
+  await expect(page.getByRole('dialog', { name: /^Key/ })).toBeHidden();
+});
+
+test('a pan problem in the list opens the key at its pan @touch', async ({ editor }) => {
+  await editor.fileInput.setInputFiles(josephWith({ [ME1_AT.sendPan(0, 1)]: 90 }));
+  await expect(editor.configName).toHaveValue('JOSEPH');
+  await editor.button(/^1 problem/).click();
+  await editor.menuItem(/Key 1's pan for channel 2 must be/).click();
+  await expect(editor.sheet).toHaveAccessibleName('Key 1');
+  await expect(editor.slider(/^Channel 2 pan in key 1$/)).toBeFocused();
 });
 
 test('exports from a phone are byte-exact apart from the edits @touch', async ({ editor }) => {

@@ -8,14 +8,18 @@ import {
   type Channel,
   KEY_COUNT,
   type Key,
+  type KeyType,
   type Level,
+  type Member,
+  PAN_CENTRE,
   type System,
 } from '@mcmillan/me1-mate-core';
 
 /** A complete system as the editor holds it. */
 export type Editable = Pick<System, 'channels' | 'keys' | 'source'>;
 
-export type EditableKeyType = 'unassigned' | 'auto' | 'channel' | 'group';
+/** The types the editor offers: every type the core can build (`KEY_TYPES`), not `unknown`. */
+export type EditableKeyType = Exclude<KeyType, 'unknown'>;
 
 export const blank = (): Editable => ({
   channels: Array.from({ length: CHANNEL_COUNT }, (): Channel => ({})),
@@ -150,27 +154,42 @@ export const groupHolding = (
 };
 
 /**
- * Change a key's type, keeping the name and level where the new type has
- * them. A channel key that becomes a group starts with its channel as the
- * first member (unless another group has it), and a group that becomes a
- * channel key takes its first member.
+ * Change a key's type, keeping what the new type also has: the label (from
+ * a channel, group, Aux Input or tone key), the level (from any assigned
+ * key), mute, and pan between a channel key and the Aux Input. A channel key
+ * that becomes a group starts with its channel, and its pan, as the first
+ * member (unless another group has it); a group that becomes a channel key
+ * takes its first member and that member's pan. An unknown key's raw pan is
+ * never carried.
  */
 export const setKeyType = (system: Editable, index: number, type: EditableKeyType): Editable => {
   const old = system.keys[index];
   if (!old || old.type === type) return system;
-  const name = old.type === 'channel' || old.type === 'group' ? old.name : undefined;
+  const name =
+    old.type === 'channel' || old.type === 'group' || old.type === 'aux' || old.type === 'tone'
+      ? old.name
+      : undefined;
   const level = old.type === 'unassigned' ? undefined : old.level;
+  const muted = old.type === 'unassigned' || old.type === 'unknown' ? undefined : old.muted;
+  const pan =
+    old.type === 'channel' || old.type === 'aux'
+      ? old.pan
+      : old.type === 'group'
+        ? old.members[0]?.pan
+        : undefined;
   const named = name === undefined ? {} : { name };
   const levelled = level === undefined ? {} : { level };
-  const carried =
+  const mute = muted === undefined ? {} : { muted };
+  const panned = pan === undefined ? {} : { pan };
+  const carried: Member[] =
     old.type === 'channel' && groupHolding(system, old.channel, index) === undefined
-      ? [{ channel: old.channel }]
+      ? [{ channel: old.channel, ...panned }]
       : [];
   const next: Key =
     type === 'unassigned'
       ? { type }
       : type === 'auto'
-        ? { type, ...levelled }
+        ? { type, ...levelled, ...mute }
         : type === 'channel'
           ? {
               type,
@@ -179,16 +198,54 @@ export const setKeyType = (system: Editable, index: number, type: EditableKeyTyp
                 firstFreeChannel(system, index),
               ...named,
               ...levelled,
+              ...panned,
+              ...mute,
             }
-          : { type, members: carried, ...named, ...levelled };
+          : type === 'group'
+            ? { type, members: carried, ...named, ...levelled, ...mute }
+            : type === 'aux'
+              ? { type, ...named, ...levelled, ...(old.type === 'group' ? {} : panned), ...mute }
+              : { type, ...named, ...levelled, ...mute };
   return setKey(system, index, next);
 };
 
 export const setKeyName = (system: Editable, index: number, name: string): Editable => {
   const key = system.keys[index];
-  return key?.type === 'channel' || key?.type === 'group'
+  return key?.type === 'channel' ||
+    key?.type === 'group' ||
+    key?.type === 'aux' ||
+    key?.type === 'tone'
     ? setKey(system, index, { ...key, name })
     : system;
+};
+
+/** Whether a key has a pan of its own: a channel key or the Aux Input (a group's members have theirs). */
+export const hasPan = (key: Key | undefined): key is Extract<Key, { type: 'channel' | 'aux' }> =>
+  key?.type === 'channel' || key?.type === 'aux';
+
+/** Whether a key can be muted: every assigned type the editor offers. */
+export const canMute = (
+  key: Key | undefined,
+): key is Extract<Key, { type: 'channel' | 'group' | 'auto' | 'aux' | 'tone' }> =>
+  key !== undefined && key.type !== 'unassigned' && key.type !== 'unknown';
+
+/** Whether a key's pan is a balance: the Aux Input, which is stereo, or a channel key on a linked pair. */
+export const isBalance = (system: Editable, key: Key | undefined): boolean =>
+  key?.type === 'aux' ||
+  (key?.type === 'channel' && isStereo(system, pickTarget(system, key.channel)));
+
+/** Set a channel or Aux Input key's pan; returns the system unchanged if it's the same. */
+export const setKeyPan = (system: Editable, index: number, pan: number): Editable => {
+  const key = system.keys[index];
+  if (!hasPan(key) || (key.pan ?? PAN_CENTRE) === pan) return system;
+  return setKey(system, index, { ...key, pan });
+};
+
+/** Mute or unmute a key; returns the system unchanged if it already is. */
+export const setKeyMuted = (system: Editable, index: number, muted: boolean): Editable => {
+  const key = system.keys[index];
+  if (!canMute(key) || (key.muted ?? false) === muted) return system;
+  return setKey(system, index, { ...key, muted });
 };
 
 export const setKeyLevel = (system: Editable, index: number, level: Level): Editable => {
@@ -246,6 +303,40 @@ export const setMemberLevel = (
     ...key,
     members: key.members.map((m) => (m.channel === channel ? { ...m, level } : m)),
   });
+};
+
+/** Set one group member's pan; returns the system unchanged if it isn't a member or the pan is the same. */
+export const setMemberPan = (
+  system: Editable,
+  index: number,
+  channel: number,
+  pan: number,
+): Editable => {
+  const key = system.keys[index];
+  if (key?.type !== 'group') return system;
+  const member = key.members.find((m) => m.channel === channel);
+  if (!member || (member.pan ?? PAN_CENTRE) === pan) return system;
+  return setKey(system, index, {
+    ...key,
+    members: key.members.map((m) => (m.channel === channel ? { ...m, pan } : m)),
+  });
+};
+
+/**
+ * A pan as the editor shows it: the ME-1's steps either side of centre,
+ * `L 12`, `C`, `R 30` (`L 37` is hard left). The steps are the ME-1's own (0
+ * hard left, 37 centre, 74 hard right); counting them from the centre is this
+ * editor's convention, not something read from the ME-1's screen.
+ */
+export const panText = (pan: number | undefined): string => {
+  const off = (pan ?? PAN_CENTRE) - PAN_CENTRE;
+  return off === 0 ? 'C' : off < 0 ? `L ${-off}` : `R ${off}`;
+};
+
+/** A pan in words, for screen readers: "left 12", "centre", "right 30". */
+export const panSpoken = (pan: number | undefined): string => {
+  const off = (pan ?? PAN_CENTRE) - PAN_CENTRE;
+  return off === 0 ? 'centre' : off < 0 ? `left ${-off}` : `right ${off}`;
 };
 
 // ---- picking channels for a key --------------------------------------------

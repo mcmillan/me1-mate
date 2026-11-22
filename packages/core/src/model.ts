@@ -20,8 +20,12 @@ export const KEY_COUNT = 16;
 export type Level = number | 'off';
 /** The lowest level above `'off'`, in dB. */
 export const LEVEL_MIN = (-0x7fff + 1 + 2560) / 256;
-/** The highest level, in dB. */
-export const LEVEL_MAX = 10;
+/**
+ * The highest level, in dB: the most an ME-1 has been seen to save (raw
+ * 0xff9f, a key and a member at full), about +9.62 on this scale, short of the
+ * guide's +10. Higher levels are an error, since the ME-1 never writes them.
+ */
+export const LEVEL_MAX = (-0x61 + 2560) / 256;
 
 /**
  * Pan is kept as the ME-1 stores it: a step from {@link PAN_MIN} to

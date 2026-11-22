@@ -1,19 +1,36 @@
-import { buildME1Config, buildMEUConfig, type Key } from '@mcmillan/me1-mate-core';
+import {
+  buildME1Config,
+  buildMEUConfig,
+  type Key,
+  LEVEL_MAX,
+  PAN_CENTRE,
+  PAN_MAX,
+  PAN_MIN,
+} from '@mcmillan/me1-mate-core';
 import { describe, expect, it } from 'vitest';
 import {
   blank,
+  canMute,
   canPick,
   channelUses,
   clean,
   type Editable,
   groupHolding,
+  hasPan,
+  isBalance,
   isBlank,
   keyLabel,
   keyPlays,
   levelText,
+  panSpoken,
+  panText,
   pickChannel,
   setKey,
+  setKeyMuted,
+  setKeyName,
+  setKeyPan,
   setKeyType,
+  setMemberPan,
   setStereo,
 } from '../src/lib/edit.ts';
 import { example } from '../src/lib/example.ts';
@@ -140,6 +157,168 @@ describe('setKeyType', () => {
     const system = withKeys({ type: 'group', members: [{ channel: 7 }] });
     expect(setKeyType(system, 0, 'group')).toBe(system);
   });
+
+  it('makes a bare Aux Input or tone key from an empty one', () => {
+    expect(setKeyType(blank(), 0, 'aux').keys[0]).toEqual({ type: 'aux' });
+    expect(setKeyType(blank(), 0, 'tone').keys[0]).toEqual({ type: 'tone' });
+  });
+
+  it('carries label, level, pan and mute from a channel key to the Aux Input', () => {
+    const system = withKeys({
+      type: 'channel',
+      channel: 5,
+      name: 'Click',
+      level: -3,
+      pan: 20,
+      muted: true,
+    });
+    expect(setKeyType(system, 0, 'aux').keys[0]).toEqual({
+      type: 'aux',
+      name: 'Click',
+      level: -3,
+      pan: 20,
+      muted: true,
+    });
+  });
+
+  it('drops the pan for a tone, which has none, and for Auto', () => {
+    const system = withKeys({ type: 'aux', name: 'iPod', level: 2, pan: 50, muted: true });
+    expect(setKeyType(system, 0, 'tone').keys[0]).toEqual({
+      type: 'tone',
+      name: 'iPod',
+      level: 2,
+      muted: true,
+    });
+    expect(setKeyType(system, 0, 'auto').keys[0]).toEqual({ type: 'auto', level: 2, muted: true });
+  });
+
+  it('gives an Aux Input its channel, with its balance, when it becomes a channel key', () => {
+    const system = withKeys({ type: 'aux', pan: 10 });
+    expect(setKeyType(system, 0, 'channel').keys[0]).toEqual({
+      type: 'channel',
+      channel: 1,
+      pan: 10,
+    });
+  });
+
+  it("moves pan between a channel key and its group's first member", () => {
+    const channel = withKeys({ type: 'channel', channel: 5, pan: 60 });
+    const group = setKeyType(channel, 0, 'group');
+    expect(group.keys[0]).toEqual({ type: 'group', members: [{ channel: 5, pan: 60 }] });
+    expect(setKeyType(group, 0, 'channel').keys[0]).toEqual({
+      type: 'channel',
+      channel: 5,
+      pan: 60,
+    });
+    expect(setKeyType(group, 0, 'aux').keys[0], "a member's pan isn't the Aux's").toEqual({
+      type: 'aux',
+    });
+  });
+
+  it("never carries an unknown key's raw pan or flags, and empties a key completely", () => {
+    const system = withKeys({ type: 'unknown', flags: 9, source: 44, pan: 200, level: 1 });
+    expect(setKeyType(system, 0, 'aux').keys[0]).toEqual({ type: 'aux', level: 1 });
+    const muted = withKeys({ type: 'tone', muted: true });
+    expect(setKeyType(muted, 0, 'unassigned').keys[0]).toEqual({ type: 'unassigned' });
+  });
+});
+
+describe('setKeyName', () => {
+  it('names Aux Input and tone keys too, but not Auto', () => {
+    const system = withKeys({ type: 'aux' }, { type: 'tone' }, { type: 'auto' });
+    expect(setKeyName(system, 0, 'iPod').keys[0]).toEqual({ type: 'aux', name: 'iPod' });
+    expect(setKeyName(system, 1, 'Test').keys[1]).toEqual({ type: 'tone', name: 'Test' });
+    expect(setKeyName(system, 2, 'X')).toBe(system);
+  });
+});
+
+describe('pan', () => {
+  it('sets the pan of a channel or Aux Input key, and nothing else', () => {
+    const system = withKeys(
+      { type: 'channel', channel: 1 },
+      { type: 'aux' },
+      { type: 'tone' },
+      { type: 'auto' },
+      { type: 'group', members: [] },
+    );
+    expect(setKeyPan(system, 0, 12).keys[0]).toEqual({ type: 'channel', channel: 1, pan: 12 });
+    expect(setKeyPan(system, 1, 74).keys[1]).toEqual({ type: 'aux', pan: 74 });
+    for (const i of [2, 3, 4]) expect(setKeyPan(system, i, 12)).toBe(system);
+    expect(hasPan(system.keys[0]) && hasPan(system.keys[1]) && !hasPan(system.keys[4])).toBe(true);
+  });
+
+  it("is a no-op when the pan doesn't change, including centre on an unset pan", () => {
+    const system = withKeys({ type: 'channel', channel: 1 }, { type: 'aux', pan: 20 });
+    expect(setKeyPan(system, 0, PAN_CENTRE)).toBe(system);
+    expect(setKeyPan(system, 1, 20)).toBe(system);
+  });
+
+  it("sets one group member's pan", () => {
+    const system = withKeys({
+      type: 'group',
+      members: [{ channel: 1, level: -2 }, { channel: 3 }],
+    });
+    expect(setMemberPan(system, 0, 3, 0).keys[0]).toEqual({
+      type: 'group',
+      members: [
+        { channel: 1, level: -2 },
+        { channel: 3, pan: 0 },
+      ],
+    });
+    expect(setMemberPan(system, 0, 3, PAN_CENTRE)).toBe(system);
+    expect(setMemberPan(system, 0, 5, 10), 'not a member').toBe(system);
+  });
+
+  it('calls a pan a balance on the Aux Input and on a stereo pair', () => {
+    const system = setStereo(
+      withKeys({ type: 'channel', channel: 5 }, { type: 'channel', channel: 7 }, { type: 'aux' }),
+      5,
+      true,
+    );
+    expect(isBalance(system, system.keys[0])).toBe(true);
+    expect(isBalance(system, system.keys[1])).toBe(false);
+    expect(isBalance(system, system.keys[2])).toBe(true);
+  });
+
+  it('reads out steps either side of centre', () => {
+    expect(panText(undefined)).toBe('C');
+    expect(panText(PAN_CENTRE)).toBe('C');
+    expect(panText(PAN_MIN)).toBe('L 37');
+    expect(panText(25)).toBe('L 12');
+    expect(panText(PAN_MAX)).toBe('R 37');
+    expect(panSpoken(67)).toBe('right 30');
+    expect(panSpoken(37)).toBe('centre');
+    expect(panSpoken(0)).toBe('left 37');
+  });
+});
+
+describe('setKeyMuted', () => {
+  it('mutes and unmutes any assigned key', () => {
+    const system = withKeys({ type: 'tone' }, { type: 'group', members: [] });
+    const muted = setKeyMuted(system, 0, true);
+    expect(muted.keys[0]).toEqual({ type: 'tone', muted: true });
+    expect(setKeyMuted(muted, 0, false).keys[0]).toEqual({ type: 'tone', muted: false });
+    expect(setKeyMuted(system, 1, true).keys[1]).toMatchObject({ muted: true });
+  });
+
+  it('leaves empty keys alone, and keys already so', () => {
+    const system = withKeys({ type: 'unassigned' }, { type: 'aux' });
+    expect(setKeyMuted(system, 0, true)).toBe(system);
+    expect(setKeyMuted(system, 1, false)).toBe(system);
+    expect(canMute(system.keys[0])).toBe(false);
+    expect(canMute(system.keys[1])).toBe(true);
+  });
+});
+
+describe('Aux Input and tone keys', () => {
+  it("take no channels and aren't shown on any", () => {
+    const system = withKeys({ type: 'aux' }, { type: 'tone' });
+    expect(canPick(system.keys[0])).toBe(false);
+    expect(pickChannel(system, 1, 4)).toBe(system);
+    expect(channelUses(system).every((u) => u.length === 0)).toBe(true);
+    expect(keyLabel(system, system.keys[0] as Key)).toBe('Aux In');
+    expect(keyLabel(system, system.keys[1] as Key)).toBe('Tone');
+  });
 });
 
 describe('levelText', () => {
@@ -148,6 +327,7 @@ describe('levelText', () => {
     expect(levelText('off')).toBe('OFF');
     expect(levelText(-3)).toBe('-3.0 dB');
     expect(levelText(4.25)).toBe('+4.3 dB');
+    expect(levelText(LEVEL_MAX)).toBe('+9.6 dB');
   });
 });
 

@@ -79,9 +79,11 @@ make sure every export is described and nothing described is gone.
   works, past sessions) and the editor. From 700px wide the editor is one
   page (`App.tsx`, laid out by `.workspace` in `styles.css`): the key grid,
   the selected key's inspector and the channel grid are always on screen
-  together; don't add views or tabs to it. Below 700px (`PHONE_QUERY` in
-  `lib/layout.ts`) it is the phone layout, and that has exactly three
-  things: the key screen (the grid, all 16 keys without scrolling), the key
+  together; don't add views or tabs to it. Below 700px, or on a touch screen
+  under 500px tall (a phone on its side; `PHONE_QUERY` in `lib/layout.ts`),
+  it is the phone layout, and that has exactly three things: the key screen
+  (the grid, all 16 keys filling the window exactly, 4×4 upright and 8×2 on
+  its side, without scrolling), the key
   sheet (`KeySheet.tsx`: the inspector with the key's channel picker inside
   it, on a native modal `<dialog>`, `keySheetOpenAtom`) and the Channels
   screen (the channel grid for names and links, chosen with the top bar's
@@ -92,7 +94,9 @@ make sure every export is described and nothing described is gone.
   applied to `selectedKeyAtom`, and `highlightKeyAtom` links a key and its
   channels on hover and focus. With files loaded the one-page editor must fit
   a 1280×720 window without scrolling, and the phone's key screen its
-  window; check it when a panel grows. The tour (`Tour.tsx`) points at the
+  window; check it when a panel grows. Judge empty space from viewport
+  screenshots and `scrollHeight` against `innerHeight`, never full-page
+  screenshots, which stretch anything sized in `dvh`. The tour (`Tour.tsx`) points at the
   regions by their roles and wrapper classes, with its own targets for the
   phone layout (`Step.phone`); keep both true when they change.
 - Look: the typeface is Allo (`public/fonts`, set in `styles.css`; tabular,

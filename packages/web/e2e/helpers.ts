@@ -4,7 +4,7 @@
  * and the editor's parts by their roles and names.
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +39,7 @@ export const editorOf = (page: Page) => {
   const sheet = page.getByRole('dialog', { name: /^Key \d+$/ });
   return {
     page,
+    textbox,
     tiles,
     keyGrid,
     configName,
@@ -61,6 +62,13 @@ export const editorOf = (page: Page) => {
         .getByRole('group', { name: `Key ${key} type` })
         .getByRole('button', { name: type, exact: true }),
     channelName: (n: number) => textbox(`Channel ${n} name`),
+    /** A fader or pan control by its name: `Key 3 level`, `Key 3 pan`, `Key 15 balance`. */
+    slider: (name: string | RegExp) =>
+      page
+        .getByRole('slider', typeof name === 'string' ? { name, exact: true } : { name })
+        .filter({ visible: true }),
+    /** Key `n`'s mute toggle. */
+    mute: (n: number) => button(`Mute key ${n}`).filter({ visible: true }),
     tileName: (i: number) => tiles.nth(i).getAttribute('aria-label'),
     /**
      * A top bar command by its button's name (`Show me around`, `Undo (⌘Z)`,
@@ -154,6 +162,31 @@ export const brokenFile = (): string => {
   writeFileSync(path, Buffer.from('not a config'));
   return path;
 };
+
+/**
+ * Where things are in JOSEPH.ME1: key `k`'s (0-based) record starts after the
+ * 7-byte header; in it the flags are at +0, send `s`'s pan at +2 + 4s + 3,
+ * the level at +194 and the pan at +196.
+ */
+export const ME1_AT = {
+  flags: (k: number) => 7 + 205 * k,
+  sendPan: (k: number, s: number) => 7 + 205 * k + 2 + 4 * s + 3,
+  level: (k: number) => 7 + 205 * k + 194,
+  pan: (k: number) => 7 + 205 * k + 196,
+};
+
+/** JOSEPH.ME1 with some bytes changed, saved under a scratch directory, for a file the editor will find fault with. */
+export const josephWith = (changes: Readonly<Record<number, number>>): string => {
+  const bytes = readFileSync(join(FIXTURES, 'JOSEPH.ME1'));
+  for (const [at, value] of Object.entries(changes)) bytes[Number(at)] = value;
+  const path = join(scratch(), 'JOSEPH.ME1');
+  writeFileSync(path, bytes);
+  return path;
+};
+
+/** The offsets at which two files differ. */
+export const differences = (a: Uint8Array, b: Uint8Array): number[] =>
+  [...a.keys()].filter((i) => a[i] !== b[i]);
 
 /** Whether the page fits the window without scrolling. */
 export const fits = (page: Page) =>
