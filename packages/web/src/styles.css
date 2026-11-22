@@ -260,8 +260,12 @@ html {
   .notices:not(:empty) + .workspace {
     padding-block-start: 20px;
   }
-  /* The top bar's edges line up with the regions below it. */
+  /* A taller top bar with room above it; its edges line up with the regions below. */
+  :root {
+    --topbar: 76px;
+  }
   .top-bar:not(.top-phone) .top-row {
+    padding-block-start: 16px;
     padding-inline: 32px;
   }
   .workspace-inspector {
