@@ -6,21 +6,31 @@
  *
  * It starts by itself the first time someone reaches the editor, and from the
  * top bar's "Show me around" at any time (`startTourAtom`). In the phone
- * layout the steps point at the phone's regions (`Step.phone`): the key
- * screen, the Keys | Channels switch and Export. The app opens on
+ * layout it has its own steps (`PHONE_STEPS`), since the phone has screens
+ * rather than regions: the key screen, a key's page, the Channels screen (the
+ * tour switches to it for that step, and back to Keys after and on ending),
+ * then Export and the ⋯ menu. The app opens on
  * the home screen, so reaching the editor always follows something the user
  * did: the tour never takes focus as the page loads. It reads and changes
  * nothing in the system.
  */
 
-import { atom, useAtom, useAtomValue } from 'jotai';
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { usePhone } from '../lib/layout.ts';
 import { phoneScreenAtom, sessionIdAtom } from '../lib/store.ts';
 import { keyStyle } from '../lib/theme.ts';
 import { Action } from './ui.tsx';
 
-type StepId = 'keys' | 'channels' | 'key' | 'export';
+type StepId =
+  | 'keys'
+  | 'channels'
+  | 'key'
+  | 'export'
+  | 'phone-keys'
+  | 'phone-key'
+  | 'phone-channels'
+  | 'phone-export';
 
 interface Step {
   readonly id: StepId;
@@ -32,20 +42,18 @@ interface Step {
   readonly target: string;
   /** The key whose colour the step wears (0-based). */
   readonly key: number;
-  /** In the phone layout, where the regions are arranged differently: what changes. */
-  readonly phone?: Partial<Pick<Step, 'title' | 'body' | 'target'>>;
+  /** Phone tour only: the screen the step needs showing. */
+  readonly screen?: 'keys' | 'channels';
 }
 
-const STEPS: readonly Step[] = [
+/** The one-page editor's tour: each region in turn. */
+const DESKTOP_STEPS: readonly Step[] = [
   {
     id: 'keys',
     title: 'Keys',
     body: 'These are the 16 keys on your ME-1. Pick a key to work on it.',
     target: '.workspace-keys',
     key: 0,
-    phone: {
-      body: 'These are the 16 keys on your ME-1. Tap a key to open it and set it up.',
-    },
   },
   {
     id: 'channels',
@@ -53,10 +61,6 @@ const STEPS: readonly Step[] = [
     body: 'These are the 40 channels from your ME-U. Press a channel’s number to give it to the key you picked; press it again to take it away. A key can play one channel or a group of them. You name channels here too.',
     target: '.workspace-channels',
     key: 1,
-    phone: {
-      body: 'The 40 channels from your ME-U have a screen of their own: switch to Channels to name them and link stereo pairs.',
-      target: '.top-switch',
-    },
   },
   {
     id: 'key',
@@ -64,11 +68,6 @@ const STEPS: readonly Step[] = [
     body: 'The key you picked opens here. Set its label and its level; a group also has a level for each of its channels.',
     target: '.workspace-inspector',
     key: 2,
-    phone: {
-      title: 'The key you open',
-      body: 'A key opens on a page of its own. Set its label and level, and press channels’ numbers to give them to it; press one again to take it away. A key can play one channel or a group of them. ‹ and › go to the keys either side.',
-      target: '.workspace-keys',
-    },
   },
   {
     id: 'export',
@@ -78,6 +77,48 @@ const STEPS: readonly Step[] = [
     key: 3,
   },
 ];
+
+/**
+ * The phone's tour, which has screens rather than regions: the key screen,
+ * what a key opens, the Channels screen (shown for that step, and Keys again
+ * after it), then Export and the ⋯ menu.
+ */
+const PHONE_STEPS: readonly Step[] = [
+  {
+    id: 'phone-keys',
+    title: 'Your keys',
+    body: 'These are the 16 keys on your ME-1. Tap one to open its page and set it up.',
+    target: '.workspace-keys',
+    key: 0,
+    screen: 'keys',
+  },
+  {
+    id: 'phone-key',
+    title: 'A key’s page',
+    body: 'A key’s page has everything about it: what it plays, its label, level, pan and mute. Tap channels there to give them to the key, and tap one again to take it away; a key can play one channel or a group. ‹ and › go to the keys either side, and Done closes it.',
+    target: '.workspace-keys',
+    key: 1,
+    screen: 'keys',
+  },
+  {
+    id: 'phone-channels',
+    title: 'Channels',
+    body: 'Your ME-U’s 40 channels have this screen of their own: name them and link stereo pairs here. Switch between Keys and Channels at the top.',
+    target: '.workspace-channels',
+    key: 2,
+    screen: 'channels',
+  },
+  {
+    id: 'phone-export',
+    title: 'Export and more',
+    body: 'When you’re done, export: the .ME1 goes on the ME-1’s USB stick and the .meu goes to the ME-U. Your work is saved in this browser as you go. The ⋯ menu has undo and redo, opening files, starting afresh, this tour and Home.',
+    target: '.top-export',
+    key: 3,
+    screen: 'keys',
+  },
+];
+
+const stepsFor = (phone: boolean): readonly Step[] => (phone ? PHONE_STEPS : DESKTOP_STEPS);
 
 /** Set once the tour has been finished or skipped, so it doesn't start by itself again. */
 const SEEN_KEY = 'me1-mate:tour:v1';
@@ -102,7 +143,7 @@ const markSeen = (): void => {
   }
 };
 
-/** The step showing (an index into `STEPS`), or `null` while the tour isn't running. */
+/** The step showing (an index into the layout's steps), or `null` while the tour isn't running. */
 const stepAtom = atom<number | null>(null);
 
 /** Start the tour from its first step. It only shows in the editor (on a phone, on its key screen). */
@@ -111,10 +152,10 @@ export const startTourAtom = atom(null, (_get, set) => {
   set(stepAtom, 0);
 });
 
-/** A step as it is in the layout showing. */
+/** A step of the tour for the layout showing; a step past the end is the last. */
 const stepFor = (index: number, phone: boolean): Step => {
-  const step = STEPS[index] as Step;
-  return phone && step.phone ? { ...step, ...step.phone } : step;
+  const steps = stepsFor(phone);
+  return steps[Math.min(index, steps.length - 1)] as Step;
 };
 
 const NATIVE_ANCHORS = CSS.supports('position-area: block-end');
@@ -124,11 +165,9 @@ const BESIDE = '(min-width: 1100px)';
 /** What recedes while the tour runs: the regions, the notices and the top bar's parts. */
 const DIMMED =
   '.workspace-keys, .workspace-inspector, .workspace-channels, .notices, .top-id, .top-group, .top-help, .top-switch';
-const TARGETS = STEPS.flatMap((step) =>
-  [step.target, step.phone?.target]
-    .filter((target) => target !== undefined)
-    .map((target) => `:root[data-tour="${step.id}"] ${target}`),
-).join(', ');
+const TARGETS = [...DESKTOP_STEPS, ...PHONE_STEPS]
+  .map((step) => `:root[data-tour="${step.id}"] ${step.target}`)
+  .join(', ');
 
 /*
  * The step is a raised card. By default it is a sheet along the bottom of the
@@ -184,8 +223,10 @@ const CSS_TEXT = `
 :root[data-tour] :is(${DIMMED}) { opacity: 0.32; }
 ${TARGETS} { anchor-name: --tour; opacity: 1; }
 /* Export shares its group: there, dim what's beside it instead of the group. */
-:root[data-tour="export"] .top-group:has(.top-export) { opacity: 1; }
-:root[data-tour="export"] .top-group:has(.top-export) .top-problems { opacity: 0.32; }
+:root:is([data-tour="export"], [data-tour="phone-export"]) .top-group:has(.top-export) { opacity: 1; }
+:root:is([data-tour="export"], [data-tour="phone-export"]) .top-group:has(.top-export) .top-problems { opacity: 0.32; }
+/* The phone's last step is also about the ⋯ menu beside Export. */
+:root[data-tour="phone-export"] .top-help { opacity: 1; }
 
 @media (prefers-reduced-motion: no-preference) {
   /* Unscoped, so the page also comes back smoothly when the tour ends. */
@@ -206,7 +247,7 @@ const GAP = 20;
 const EDGE = 12;
 
 /** Where a step sits by its region, in the order tried: the same places as the CSS. */
-const PLACES: Record<StepId, readonly ('below' | 'above' | 'before' | 'below-end')[]> = {
+const PLACES: Partial<Record<StepId, readonly ('below' | 'above' | 'before' | 'below-end')[]>> = {
   keys: ['below', 'above'],
   channels: ['above', 'below'],
   key: ['before'],
@@ -234,7 +275,7 @@ const placeByScript = (card: HTMLElement, target: HTMLElement, id: StepId) => {
   };
   const fits = ({ left, top }: { left: number; top: number }) =>
     left >= EDGE && top >= EDGE && left + width <= vw - EDGE && top + height <= vh - EDGE;
-  const spot = PLACES[id].map((place) => spots[place]).find(fits) ?? {
+  const spot = (PLACES[id] ?? ['below', 'above']).map((place) => spots[place]).find(fits) ?? {
     left: vw - GAP - width,
     top: vh - GAP - height,
   };
@@ -252,7 +293,7 @@ const bringIntoView = (card: HTMLElement, target: HTMLElement, id: StepId) => {
   const behavior = window.matchMedia('(prefers-reduced-motion: no-preference)').matches
     ? 'smooth'
     : 'auto';
-  if (id === 'export') {
+  if (id === 'export' || id === 'phone-export') {
     window.scrollTo({ top: 0, behavior });
     return;
   }
@@ -276,7 +317,8 @@ const TourStep = ({
   readonly onEnd: () => void;
 }) => {
   const step = stepFor(index, phone);
-  const last = index === STEPS.length - 1;
+  const total = stepsFor(phone).length;
+  const last = index >= total - 1;
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
 
@@ -316,7 +358,7 @@ const TourStep = ({
           {step.title}
         </h2>
         <span className="tour-count">
-          {index + 1} of {STEPS.length}
+          {index + 1} of {total}
         </span>
       </div>
       <p id={`${id}-body`} className="tour-body">
@@ -369,8 +411,16 @@ export const Tour = () => {
   const [index, setIndex] = useAtom(stepAtom);
   const sessionId = useAtomValue(sessionIdAtom);
   const phone = usePhone();
+  const setScreen = useSetAtom(phoneScreenAtom);
   const style = useRef<HTMLStyleElement>(null);
   const running = index !== null;
+
+  // On a phone, show the screen the step is about in the same render as the
+  // step, so it finds its region.
+  const go = (next: number) => {
+    if (phone) setScreen(stepFor(next, true).screen ?? 'keys');
+    setIndex(next);
+  };
 
   // The first time someone reaches the editor; leaving it ends the tour.
   useEffect(() => {
@@ -380,6 +430,7 @@ export const Tour = () => {
 
   const end = () => {
     markSeen();
+    if (phone) setScreen('keys');
     setIndex(null);
   };
   const endRef = useRef(end);
@@ -397,11 +448,11 @@ export const Tour = () => {
   useLayoutEffect(() => {
     if (index === null) return;
     const root = document.documentElement;
-    root.dataset.tour = (STEPS[index] as Step).id;
+    root.dataset.tour = stepFor(index, phone).id;
     return () => {
       delete root.dataset.tour;
     };
-  }, [index]);
+  }, [index, phone]);
 
   // A layout effect: it notes where focus was before the first step takes it.
   useLayoutEffect(() => {
@@ -431,13 +482,7 @@ export const Tour = () => {
     <>
       <style ref={style}>{CSS_TEXT}</style>
       {index !== null && (
-        <TourStep
-          key={`${index}-${phone}`}
-          index={index}
-          phone={phone}
-          onGo={setIndex}
-          onEnd={end}
-        />
+        <TourStep key={`${index}-${phone}`} index={index} phone={phone} onGo={go} onEnd={end} />
       )}
     </>
   );

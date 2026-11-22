@@ -18,6 +18,7 @@ import { Menu, MenuItem } from './Menu.tsx';
 import { chooseFiles } from './OpenFiles.tsx';
 import { ProblemsButton } from './ProblemsButton.tsx';
 import { ScreenTabs } from './ScreenTabs.tsx';
+import { shortcutsOpenAtom } from './Shortcuts.tsx';
 import { startTourAtom } from './Tour.tsx';
 import { Action } from './ui.tsx';
 import { Wordmark } from './Wordmark.tsx';
@@ -452,6 +453,7 @@ const PhoneBar = () => {
   const reset = useSetAtom(resetAtom);
   const goHome = useSetAtom(goHomeAtom);
   const startTour = useSetAtom(startTourAtom);
+  const showShortcuts = useSetAtom(shortcutsOpenAtom);
   const [said, setSaid] = useState({ text: '', count: 0 });
   const say = (text: string) => setSaid((last) => ({ text, count: last.count + 1 }));
   return (
@@ -505,6 +507,7 @@ const PhoneBar = () => {
             <MoreItem label="Open files" onSelect={chooseFiles} />
             <MoreItem label="Start new" onSelect={() => reset()} />
             <MoreItem label={TOUR} onSelect={() => startTour()} />
+            <MoreItem label="Keyboard shortcuts" onSelect={() => showShortcuts(true)} />
             <MoreItem label={HOME} onSelect={() => goHome()} />
           </Menu>
         </span>
@@ -615,7 +618,7 @@ const DesktopBar = () => {
       <Tip id={`${id}-home`}>{HOME}</Tip>
       <Tip id={`${id}-undo`}>{UNDO}</Tip>
       <Tip id={`${id}-redo`}>{REDO}</Tip>
-      <Tip id={`${id}-tour`}>{TOUR}</Tip>
+      <Tip id={`${id}-tour`}>{`${TOUR}. Press ? for keyboard shortcuts`}</Tip>
     </YStack>
   );
 };

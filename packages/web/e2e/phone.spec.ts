@@ -141,7 +141,10 @@ test('the menu holds undo, redo, open, new, the tour and home @touch', async ({ 
   await expect(editor.sessions.getByRole('button', { name: /^Open JOSEPH/ })).not.toHaveCount(0);
 });
 
-test('the tour points at what a phone shows @touch', async ({ editor, page }) => {
+test('the phone has its own tour, switching screens as it goes @touch', async ({
+  editor,
+  page,
+}) => {
   await editor.startNew();
   await editor.screenTab('Channels').click();
   await editor.command('Show me around');
@@ -160,23 +163,57 @@ test('the tour points at what a phone shows @touch', async ({ editor, page }) =>
       };
     });
 
+  const showing = (tab: 'Keys' | 'Channels') =>
+    expect(editor.screenTab(tab), `the ${tab} screen is showing`).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  const next = () => step.getByRole('button', { name: 'Next' }).click();
+
   await expect(step).toContainText('16 keys');
-  await expect(editor.keyGrid, 'the tour starts on the key screen').toBeVisible();
+  await expect(step).toContainText('1 of 4');
+  await showing('Keys');
   expect(await target()).toMatchObject({ cls: expect.stringContaining('workspace-keys') });
-  await step.getByRole('button', { name: 'Next' }).click();
-  await expect(step).toContainText('switch to Channels');
-  expect(await target()).toMatchObject({ cls: 'top-switch', onScreen: true });
-  await step.getByRole('button', { name: 'Next' }).click();
-  await expect(step).toContainText('The key you open');
-  expect(await target()).toMatchObject({ onScreen: true });
-  await step.getByRole('button', { name: 'Next' }).click();
-  await expect(step).toContainText(/export/i);
+  await next();
+  await expect(step).toContainText('A key’s page');
+  await showing('Keys');
+  await next();
+  await expect(step, 'the Channels step shows the Channels screen').toContainText('40 channels');
+  await showing('Channels');
+  expect(await target()).toMatchObject({
+    cls: expect.stringContaining('workspace-channels'),
+    onScreen: true,
+  });
+  await step.getByRole('button', { name: 'Back' }).click();
+  await showing('Keys');
+  await next();
+  await showing('Channels');
+  await next();
+  await expect(step, 'and the step after it goes back to Keys').toContainText(/export/i);
+  await showing('Keys');
   expect(await target()).toMatchObject({
     cls: expect.stringContaining('top-export'),
     onScreen: true,
   });
   await step.getByRole('button', { name: 'Done' }).click();
   await expect(step).toHaveCount(0);
+
+  // Ending the tour on the Channels step puts the key screen back.
+  await editor.command('Show me around');
+  await next();
+  await next();
+  await showing('Channels');
+  await step.getByRole('button', { name: /Skip/ }).click();
+  await showing('Keys');
+});
+
+test('the menu opens the keyboard shortcuts @touch', async ({ editor, page }) => {
+  await editor.startNew();
+  await editor.command('Keyboard shortcuts');
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toBeHidden();
 });
 
 test('a problem in the list opens the key at the field @touch', async ({ editor, page }) => {

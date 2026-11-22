@@ -97,8 +97,11 @@ make sure every export is described and nothing described is gone.
   window; check it when a panel grows. Judge empty space from viewport
   screenshots and `scrollHeight` against `innerHeight`, never full-page
   screenshots, which stretch anything sized in `dvh`. The tour (`Tour.tsx`) points at the
-  regions by their roles and wrapper classes, with its own targets for the
-  phone layout (`Step.phone`); keep both true when they change.
+  regions by their roles and wrapper classes. The phone has its own steps
+  (`PHONE_STEPS`), each naming the screen it needs, since the phone has
+  screens rather than regions; keep both tours true when they change. The
+  keyboard shortcuts sheet (`Shortcuts.tsx`, opened by `?`) lists every
+  shortcut: update it whenever a key handler changes.
 - Look: the typeface is Allo (`public/fonts`, set in `styles.css`; tabular,
   disambiguated figures, no monospace). Weights come only from the
   `--w-text`/`--w-ui`/`--w-strong`/`--w-display`/`--w-black` variables in
@@ -112,7 +115,7 @@ make sure every export is described and nothing described is gone.
   and focus (always visible under `hover: none`). Component-specific CSS
   lives in a `<style>` block beside the component, with class names prefixed
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,
-  `sess-`, `tour-`, `wm-`, `sheet`, `tabs-`).
+  `sess-`, `tour-`, `wm-`, `sheet`, `tabs-`, `sc-`).
 - Everything runs in the browser; nothing is uploaded.
 - It works offline after one visit. The service worker (`src/sw.js`, written
   into the build with its precache list by the plugin in `vite.config.ts`)

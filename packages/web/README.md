@@ -58,10 +58,15 @@ the same parts arranged for its screen; see below):
 - **Top bar**: the wordmark (back to Home), the config's name (the `.ME1`
   file's name), a `?` that starts the tour, undo and redo (⌘Z / ⇧⌘Z), Open,
   New, whether the system is ready to export, and Export.
-- **Tour**: a four-step walk through keys, channels, the inspector and export.
+- **Keyboard shortcuts**: press `?` anywhere in the editor (outside a text
+  field) for a sheet listing them all: undo and redo, moving through keys and
+  channels, typing channel names straight through, and the level and pan
+  keys. On a phone it's also in the ⋯ menu.
+- **Tour**: a four-step walk through keys, channels, the inspector and export
+  (on a phone, its own four steps: the key screen, a key's page, the Channels
+  screen, which it switches to for that step, then Export and the ⋯ menu).
   It runs the first time you reach the editor and any time from the `?`
-  (on a phone, from the menu, pointing at the phone's key screen, the Keys |
-  Channels switch and Export).
+  (on a phone, from the ⋯ menu).
 - **Opening files**: press Open, or drop an `.ME1`, a `.meu`, or both
   anywhere, on either screen. Opening files, like New, starts a new session
   and never overwrites the one that was open, so nothing asks you to confirm.
@@ -199,7 +204,8 @@ src
 │   ├── Inspector.tsx    editor for the selected key (also the key sheet's body)
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key (all, or the phone's pick or names part)
 │   ├── Fader.tsx        level fader (a native range input on the fader law) and the pan control
-│   ├── Tour.tsx         the guided walk through the editor
+│   ├── Tour.tsx         the guided walk through the editor, one for the one page and one for phones
+│   ├── Shortcuts.tsx    the keyboard shortcuts sheet (`?`)
 │   ├── OpenFiles.tsx, WindowDrop.tsx              opening and dropping files
 │   ├── LoadNotice.tsx, Notice.tsx                 files that couldn't be opened
 │   ├── ExportMenu.tsx, ProblemsButton.tsx, Menu.tsx   top bar menus (popover)
@@ -214,7 +220,7 @@ src
     ├── files.ts         reading files, downloading exports
     ├── messages.ts      plain-English problems
     ├── session.ts       sessions: saved as you go, listed, reopened
-    ├── shortcuts.ts     undo/redo keys
+    ├── shortcuts.ts     undo/redo keys and `?` for the shortcuts sheet
     ├── announce.ts      messages for screen readers
     └── theme.ts         the typeface and the key colours
 public                   manifest, icons, link preview, robots.txt, sitemap, fonts (see above)
@@ -225,6 +231,7 @@ test
 e2e
 ├── helpers.ts           the page fixture (empty storage, tour seen, no page errors) and locators
 ├── home, picks, files, sessions, tour, layout .spec.ts   the journeys and the layout
+├── shortcuts.spec.ts    the `?` sheet
 ├── phone.spec.ts        the phone layout: key sheet, Channels screen, menu, tour, problems, fit
 ├── a11y.spec.ts         axe scans of every screen and dialog
 ├── offline.spec.ts      works offline after one visit (Chromium)

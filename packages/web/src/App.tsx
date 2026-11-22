@@ -7,6 +7,7 @@ import { KeyGrid } from './components/KeyGrid.tsx';
 import { KeySheet } from './components/KeySheet.tsx';
 import { LoadNotice } from './components/LoadNotice.tsx';
 import { tabId } from './components/ScreenTabs.tsx';
+import { Shortcuts } from './components/Shortcuts.tsx';
 import { Toasts } from './components/Toasts.tsx';
 import { TopBar } from './components/TopBar.tsx';
 import { Tour } from './components/Tour.tsx';
@@ -82,6 +83,7 @@ const Editor = () => {
         {phone ? <Phone /> : <OnePage />}
       </main>
       <Tour />
+      <Shortcuts />
     </>
   );
 };

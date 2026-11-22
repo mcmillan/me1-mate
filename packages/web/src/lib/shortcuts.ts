@@ -1,6 +1,7 @@
 /**
  * Keyboard shortcuts for the editor: ⌘Z / Ctrl+Z undoes, ⇧⌘Z / Ctrl+Shift+Z /
- * Ctrl+Y redoes, while the editor is showing. What happened is announced,
+ * Ctrl+Y redoes, and `?` opens the shortcuts sheet (`Shortcuts.tsx`, which
+ * lists every shortcut: keep it in step), while the editor is showing. What happened is announced,
  * since nothing else tells a screen reader.
  *
  * In a text field the browser's own undo wins: someone fixing a typo in a name
@@ -11,6 +12,7 @@
 
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { useEffect } from 'react';
+import { shortcutsOpenAtom } from '../components/Shortcuts.tsx';
 import { announce } from './announce.ts';
 import { canRedoAtom, canUndoAtom, redoAtom, screenAtom, undoAtom } from './store.ts';
 
@@ -36,6 +38,18 @@ export const useShortcuts = (): void => {
     if (!editing) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.altKey) return;
+      // `?` opens the shortcuts sheet, unless it's being typed or a dialog is up.
+      if (
+        e.key === '?' &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !isTextEntry(e.target) &&
+        !document.querySelector('dialog[open], [role="dialog"]:popover-open')
+      ) {
+        e.preventDefault();
+        store.set(shortcutsOpenAtom, true);
+        return;
+      }
       if (!(e.metaKey || e.ctrlKey) || isTextEntry(e.target)) return;
       const key = e.key.toLowerCase();
       if (key === 'z' && !e.shiftKey) {
