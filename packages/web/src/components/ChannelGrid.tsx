@@ -71,12 +71,12 @@ const SPOT_MARKERS = SPOT_TAGS.replaceAll(',', ' .ch-face,').concat(' .ch-face')
 const CSS = `
 .ch-root {
   container: ch / inline-size;
-  --ch-chip: 28px;
+  --ch-chip: 26px;
   --ch-h: 44px;
   --ch-gap: 8px;
   --ch-pair-min: 200px;
-  /* The track between an unlinked pair's two channels: the seam, and the room either side of it. */
-  --ch-mid: 13px;
+  /* The track between an unlinked pair's two channels: the seam down its middle, and the link's room either side of it. */
+  --ch-mid: 20px;
   /* A hairline for marks on a cell, where --line would vanish. */
   --ch-soft: color-mix(in oklab, var(--ink) 14%, transparent);
   /* What a pair's controls sit on, for the edge that lifts a marker off it. */
@@ -161,7 +161,7 @@ const CSS = `
   grid-template-rows: repeat(var(--ch-rows, 1), minmax(var(--ch-h), auto));
   align-items: center;
   min-inline-size: 0;
-  /* The same on both sides of the seam: 8px before a chip, 3px after a name. */
+  /* Room before a chip for the selected key's ring; little after a name, so six characters fit where four pairs share a row. */
   padding-inline: 8px 3px;
   border-radius: 14px;
   background: var(--ch-under);
@@ -183,9 +183,8 @@ const CSS = `
   content: "";
   grid-area: 1 / 3;
   align-self: stretch;
-  justify-self: start;
+  justify-self: center;
   inline-size: 2px;
-  margin-inline-start: 3px;
   background: var(--card);
 }
 /* A stereo pair is one channel to the ME-1: one cell with no seam, in its key's colour, with one chip and one name, then the link. */
@@ -204,9 +203,7 @@ const CSS = `
 }
 .ch-root .ch-err:empty { display: none; }
 @media (pointer: coarse) {
-  /* A finger-sized link between the two channels, with the seam behind it. */
   .ch-root .ch-pair { padding-inline: 6px; }
-  .ch-root .ch-pair::before { justify-self: center; margin: 0; }
   /* Too narrow for a pair of finger-sized controls in one row: a channel per row, the link beside both. */
   @container ch (width < 280px) {
     .ch-root .ch-pair,
@@ -234,6 +231,8 @@ const CSS = `
 }
 .ch-root .ch-pair[data-linked] .ch-pick { padding-inline: 9px; }
 .ch-root .ch-num { font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1; white-space: nowrap; }
+/* Wide enough for any pair's numbers, so every linked pair's name starts in the same place. */
+.ch-root .ch-pair[data-linked] .ch-num { display: inline-block; min-inline-size: 3.2em; text-align: center; }
 .ch-root .ch-pick[data-used] { background: var(--k); color: var(--on-key); box-shadow: none; }
 .ch-root .ch-pick[data-used] .ch-num { font-weight: var(--w-strong); }
 /* Another key plays it too: that key's colour, on the corner. Its number is among the markers. */
@@ -303,9 +302,13 @@ const CSS = `
     background: color-mix(in oklab, var(--ch-sel) 30%, var(--card));
     color: var(--ink);
   }
-  .ch-root .ch-grid:not([data-mode="off"]) .ch-pick[data-used]:hover { background: color-mix(in oklab, var(--k) 86%, white); }
+  /*
+   * A key's chip brightens under a wash rather than changing its fill, so its
+   * background is always exactly its key's colour, the same as the key's tile.
+   */
+  .ch-root .ch-grid:not([data-mode="off"]) .ch-pick[data-used]:hover { box-shadow: inset 0 0 0 99px rgb(255 255 255 / 14%); }
   /* The one channel a channel key plays: pressing it again does nothing. */
-  .ch-root .ch-grid[data-mode="one"] .ch-pick[aria-pressed="true"]:hover { background: var(--k); }
+  .ch-root .ch-grid[data-mode="one"] .ch-pick[aria-pressed="true"]:hover { box-shadow: none; }
 }
 .ch-root .ch-grid:not([data-mode="off"]) .ch-pick[aria-pressed="false"]:not([data-used]):active {
   background: color-mix(in oklab, var(--ch-sel) 55%, var(--card));
@@ -439,18 +442,24 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
 }
 /* Linked: it explains the merge, so it stays, quietly. */
 .ch-root .ch-link[aria-pressed="true"] { color: color-mix(in oklab, var(--ink) 55%, transparent); }
-/* Unlinked: a knot on the seam, there with the pointer or the keyboard. */
+/*
+ * Unlinked: a knot on the seam, there with the pointer or the keyboard. It
+ * is drawn 16px wide, so it keeps clear of the chip beside it; its hit area
+ * fills the track and 2px either side, a 24px target, and sits above its
+ * neighbours, so those pixels are the link's.
+ */
 .ch-root .ch-pair:not([data-linked]) .ch-link {
+  z-index: 1;
   grid-area: 1 / 3;
-  justify-self: start;
+  justify-self: center;
   inline-size: 16px;
-  margin-inline-start: -4px;
+  border-radius: 999px;
   background: var(--card);
   box-shadow: inset 0 0 0 1.5px var(--ch-soft);
   opacity: var(--ch-show);
 }
-/* The knot is drawn 16px wide; its hit area reaches a 24px target. */
-.ch-root .ch-pair:not([data-linked]) .ch-link::after { content: ""; position: absolute; top: 0; bottom: 0; left: -4px; right: -4px; }
+.ch-root .ch-pair:not([data-linked]) .ch-link::after { content: ""; position: absolute; inset-block: 0; inset-inline: -4px; }
+.ch-root .ch-pair:not([data-linked]) .ch-link svg { inline-size: 12px; block-size: 12px; }
 .ch-root .ch-link:active { background: var(--ch-soft); color: var(--ink); }
 .ch-root .ch-pair:not([data-linked]) .ch-link:active { background: var(--well); color: var(--ink); }
 @media (hover: hover) {
@@ -468,6 +477,8 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
     background: transparent;
     box-shadow: none;
   }
+  .ch-root .ch-pair:not([data-linked]) .ch-link::after { inset-inline: 0; }
+  .ch-root .ch-pair:not([data-linked]) .ch-link svg { inline-size: 14px; block-size: 14px; }
   .ch-root .ch-pair:not([data-linked]) .ch-link::before {
     content: "";
     position: absolute;
@@ -495,6 +506,8 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
 .ch-root :is(.ch-pick, .ch-link, .ch-tag, .ch-name):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .ch-root .ch-pick[aria-pressed="true"]:focus-visible { outline-offset: 5px; }
 .ch-root .ch-name:focus-visible { outline-offset: 0; }
+/* Close round the knot, so the ring stays off the chip beside it. */
+.ch-root .ch-pair:not([data-linked]) .ch-link:focus-visible { outline-offset: 1px; }
 
 /* Text on a key's colour: dark on all sixteen, and worked out from the colour where the browser can. */
 @supports (color: contrast-color(red)) {
@@ -520,6 +533,8 @@ ${SPOT_MARKERS} { background: var(--k); color: var(--on-key); }
   .ch-root :is(.ch-pick, .ch-link, .ch-tag, .ch-face, .ch-pair, .ch-slot, .ch-key, .ch-tip) {
     transition: background-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out, scale 150ms ease-out, opacity 150ms ease-out;
   }
+  /* A key's chip takes its key's colour at once, with the pop: it never shows a colour no key has. */
+  .ch-root .ch-pick[data-used] { transition-duration: 0ms, 150ms, 150ms, 150ms, 150ms; }
   .ch-root .ch-slot::after { transition: opacity 150ms ease-out, border-color 150ms ease-out; }
   /* A sweep across the keys doesn't flicker: fading waits a moment, coming back doesn't. */
   .ch-root [data-dim] { transition-delay: 0ms, 0ms, 0ms, 0ms, 80ms; }
@@ -929,7 +944,9 @@ const Name = ({ channel, name, on, dim, errorRow, last, children }: NameProps) =
           className="ch-name"
           name={`channel-${channel}-name`}
           size="sm"
-          px={2}
+          // No room to spare on the right: six characters just fit where four pairs share a row.
+          pl={2}
+          pr={0}
           py="0"
           borderWidth={0}
           maxLength={NAME_MAX}

@@ -28,12 +28,13 @@ const NATIVE_HINTS =
  * The bar sits on the canvas, with a hairline under it only once the page has
  * scrolled beneath it. It lays itself out by its own width. From 720px it is
  * one row, 60px tall (`--topbar` in styles.css); below that the toolbar takes
- * a second row, with Export at the far end. `.top-quiet` keeps words for
+ * a second row, with Export at the far end, and the tour's button ends the
+ * first, down to 320px. `.top-quiet` keeps words for
  * screen readers where the bar is too narrow to show them: on a phone, and
  * while one row is a tight fit (the status's words, in ProblemsButton, come
  * back at 860px and "Unsaved changes" at 1000px). Under 480px the toolbar
- * closes up; at 360px and under, "Ready to export" is only spoken
- * (`.top-ready`) and Export drops its arrow, so its row doesn't wrap.
+ * closes up; at 360px and under it closes up further and Export drops its
+ * arrow, so its row doesn't wrap.
  *
  * Only while it is two rows, the bar slides away as the page scrolls down and
  * comes back on the way up, or whenever focus is inside it: a scroll-state
@@ -63,23 +64,21 @@ const CSS_TEXT = `
 .top-tools { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; row-gap: 6px; min-inline-size: 0; }
 .top-group { display: flex; align-items: center; gap: 2px; }
 .top-group:last-child { gap: 8px; }
-.top-help { display: flex; }
+/* The tour's button ends the first row on a narrow bar, and starts the tools on a wide one. */
+.top-help { flex: none; display: flex; margin-inline-start: auto; }
 .top-sep { flex: none; align-self: stretch; inline-size: 10px; block-size: auto; margin: 0; border: 0; border-inline-start: 1px solid transparent; }
 .top-sep-wide { flex: 1 1 10px; }
 .top-bar button.target, .top-name { min-block-size: max(38px, var(--target)); }
 .top-bar .top-file > span { font-weight: var(--w-ui); }
-.top-bar button.top-icon { min-inline-size: max(38px, var(--target)); }
+.top-bar button.top-icon { block-size: max(38px, var(--target)); min-inline-size: max(38px, var(--target)); padding-block: 0; }
 .top-glyph { font-size: 1.25rem; font-weight: var(--w-ui); line-height: 1; }
-.top-ask { box-sizing: border-box; display: grid; place-items: center; inline-size: 22px; block-size: 22px; border: 1.5px solid currentColor; border-radius: 50%; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-strong); line-height: 1; }
 
 .top-name { flex: 0 1 auto; min-inline-size: 0; box-sizing: border-box; display: flex; align-items: center; padding-inline: 4px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); cursor: text; font-size: 1.0625rem; }
 .top-ext { color: var(--muted); font-weight: var(--w-text); user-select: none; }
 @media (hover: hover) {
   .top-name:hover { border-color: color-mix(in oklab, var(--line) 50%, var(--muted)); }
   .top-brand:hover { background: var(--well); }
-  .top-bar button:hover .top-ask { color: var(--ink); }
 }
-.top-bar button:focus-visible .top-ask { color: var(--ink); }
 .top-name:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .top-name input { inline-size: 11ch; }
 .top-bar .top-name input { font-weight: var(--w-ui); }
@@ -102,7 +101,6 @@ const CSS_TEXT = `
 @media (prefers-reduced-motion: no-preference) {
   .top-bar::after { transition: opacity 200ms ease-out; }
   .top-name { transition: border-color 120ms ease-out; }
-  .top-ask { transition: color 120ms ease-out; }
   .top-bar button { transition: scale 200ms var(--spring), background-color 120ms ease-out, border-color 120ms ease-out; }
   .top-bar button:not([aria-disabled="true"]):active { scale: 0.96; }
   .top-dot { animation: top-pop 300ms var(--spring) both; }
@@ -138,6 +136,11 @@ const CSS_TEXT = `
   .top-arrow { display: none; }
   .top-brand { font-size: 1.375rem; }
   .top-id { gap: 8px; }
+  /* Still one row of tools at 320px; fingers keep their 44px. */
+  .top-bar button.top-icon { min-inline-size: max(32px, var(--target)); }
+  .top-tools .top-group .top-file.top-file.top-file { padding-inline: 4px; }
+  .top-tools .top-group .top-problems.top-problems.top-problems { padding-inline: 8px; }
+  .top-tools .top-group .top-export.top-export.top-export { padding-inline: 12px; }
 }
 @container topbar (inline-size >= 640px) {
   .top-row { padding-inline: 20px; }
@@ -145,7 +148,7 @@ const CSS_TEXT = `
 @container topbar (inline-size >= 720px) {
   /* One row, exactly --topbar tall, for fingers' taller buttons too. */
   .top-row { flex-wrap: nowrap; padding-block: 0; }
-  .top-tools { flex: 0 0 auto; flex-wrap: nowrap; margin-inline-start: auto; }
+  .top-tools { flex: 0 0 auto; flex-wrap: nowrap; }
   .top-sep-wide { flex: none; }
 }
 @media (forced-colors: active) {
@@ -266,7 +269,6 @@ const IconAction = ({
   enabled = true,
   onPress,
   glyph,
-  className = 'top-glyph',
 }: {
   readonly label: string;
   /** The id of this button's `Tip`. */
@@ -275,8 +277,6 @@ const IconAction = ({
   readonly onPress: () => void;
   /** One of Allo's arrows, or a character. */
   readonly glyph: string;
-  /** The glyph's class. */
-  readonly className?: string;
 }) => {
   const ref = useRef<TamaguiElement>(null);
   // Tamagui's Button writes aria-disabled from its own `disabled`, which would
@@ -295,7 +295,7 @@ const IconAction = ({
       {...(enabled ? {} : { opacity: 0.4, cursor: 'not-allowed', bg: 'transparent' })}
       {...((NATIVE_HINTS ? { interestfor: tip } : { title: label }) as Record<string, string>)}
     >
-      <span className={className} aria-hidden="true">
+      <span className="top-glyph" aria-hidden="true">
         {glyph}
       </span>
     </Action>
@@ -427,6 +427,10 @@ export const TopBar = () => {
           <ConfigName />
           <Unsaved />
         </div>
+        {/* Outside the toolbar: on a narrow bar it ends the first row. */}
+        <span className="top-help">
+          <IconAction label={TOUR} tip={`${id}-tour`} onPress={() => startTour()} glyph="?" />
+        </span>
         <div
           ref={toolbar}
           role="toolbar"
@@ -468,16 +472,6 @@ export const TopBar = () => {
               New
             </Action>
           </div>
-          <Separator />
-          <span className="top-help">
-            <IconAction
-              label={TOUR}
-              tip={`${id}-tour`}
-              onPress={() => startTour()}
-              glyph="?"
-              className="top-ask"
-            />
-          </span>
           <Separator wide />
           {/* biome-ignore lint/a11y/useSemanticElements: a toolbar group, not a form's fieldset */}
           <div role="group" aria-label="Export" className="top-group">

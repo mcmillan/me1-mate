@@ -6,13 +6,13 @@ import { OpenFiles, openFilesAtom } from './OpenFiles.tsx';
 const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
 
 /**
- * The overlay: the canvas, nearly opaque, a thick dashed ring just inside the
+ * The overlay: the canvas, nearly opaque, a fine dashed ring just inside the
  * window, and one huge line with the two file types on keys' colours. It
  * takes no pointer events, so the drop lands on the window.
  */
 const CSS_TEXT = `
 .drop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 48px 32px; background: color-mix(in oklab, var(--canvas) 92%, transparent); pointer-events: none; }
-.drop-ring { position: absolute; inset: 14px; border: 5px dashed var(--ink); border-radius: 36px; }
+.drop-ring { position: absolute; inset: 14px; border: 2px dashed var(--muted); border-radius: 32px; }
 .drop-line { display: block; margin: 0; font-size: clamp(2rem, 1rem + 5.5vw, 5rem); font-weight: var(--w-display); line-height: 1.2; text-align: center; text-wrap: balance; }
 .drop-tag { display: inline-block; padding-inline: 0.3em; border: 2px solid transparent; border-radius: 999px; background: var(--k); color: var(--on-key); line-height: 1.15; rotate: var(--tilt); }
 .drop-sub { display: block; margin: 20px 0 0; color: var(--muted); font-size: 1.125rem; font-weight: var(--w-ui); line-height: 1.4; text-align: center; text-wrap: balance; }
@@ -31,8 +31,8 @@ const CSS_TEXT = `
 /**
  * The whole window is a drop target for `.ME1` and `.meu` files, with an
  * overlay while files are dragged over it. What's dropped goes through the
- * same flow as the Open button (`OpenFiles`, rendered here), which asks before
- * replacing unsaved edits.
+ * same flow as the Open button (`OpenFiles`, rendered here), which starts a
+ * new session and replaces nothing.
  */
 export const WindowDrop = () => {
   const open = useSetAtom(openFilesAtom);

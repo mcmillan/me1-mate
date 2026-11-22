@@ -11,8 +11,9 @@
  * nothing in the system.
  */
 
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useAtomValue } from 'jotai';
 import { useEffect, useId, useLayoutEffect, useRef } from 'react';
+import { sessionIdAtom } from '../lib/store.ts';
 import { keyStyle } from '../lib/theme.ts';
 import { Action } from './ui.tsx';
 
@@ -96,6 +97,9 @@ const NATIVE_ANCHORS = CSS.supports('position-area: block-end');
 /** From this width the editor is two columns and a step sits beside its region. */
 const BESIDE = '(min-width: 1100px)';
 
+/** What recedes while the tour runs: the regions, the notices and the top bar's parts. */
+const DIMMED =
+  '.workspace-keys, .workspace-inspector, .workspace-channels, .notices, .top-id, .top-group, .top-help';
 const TARGETS = STEPS.map((step) => `:root[data-tour="${step.id}"] ${step.target}`).join(', ');
 
 /*
@@ -108,8 +112,9 @@ const TARGETS = STEPS.map((step) => `:root[data-tour="${step.id}"] ${step.target
  * no room and settling in the corner when nothing fits. Without anchor
  * positioning the same places are worked out in script (`placeByScript`).
  *
- * While the tour runs (`data-tour` on the root) the step's region wears an
- * ink ring and everything else is dimmed; there's no scrim. Tamagui's reset
+ * While the tour runs (`data-tour` on the root) everything but the step's
+ * region is dimmed; the region itself isn't drawn round or changed, so
+ * nothing is left behind when the tour ends, and there's no scrim. Tamagui's reset
  * unsets the UA styles for `dialog` and `[popover]`, so the closed state and
  * the box are set here.
  */
@@ -147,26 +152,16 @@ const CSS_TEXT = `
 }
 @position-try --tour-corner { position-area: none; inset: auto 20px 20px auto; margin: 0; }
 
-:root[data-tour] :is(.workspace-keys, .workspace-inspector, .workspace-channels, .notices, .top-id, .top-group, .top-help) { opacity: 0.4; }
-:root[data-tour] :is(.workspace-channels, .workspace-inspector, .top-export) { outline: 3px solid transparent; }
-${TARGETS} { anchor-name: --tour; opacity: 1; outline-color: var(--ink); }
-:root[data-tour] .workspace-channels { border-radius: 24px; outline-offset: 5px; }
-:root[data-tour] .workspace-inspector { border-radius: 24px; outline-offset: 5px; }
-:root[data-tour] .top-export { outline-offset: 3px; }
-/* Keys sits just under the top bar, which would cover an outline: its ring is drawn closer in at the top. */
-:root[data-tour] .workspace-keys { position: relative; }
-:root[data-tour] .workspace-keys::after { content: ""; position: absolute; inset: -4px -8px -8px; border: 3px solid transparent; border-radius: 22px; pointer-events: none; }
-:root[data-tour="keys"] .workspace-keys::after { border-color: var(--ink); }
-@media (min-width: 640px) {
-  :root[data-tour] .workspace-keys::after { inset: -4px -11px -11px; border-radius: 26px; }
-}
+/* Everything but the step's region recedes; the region itself is left exactly as it is. */
+:root[data-tour] :is(${DIMMED}) { opacity: 0.32; }
+${TARGETS} { anchor-name: --tour; opacity: 1; }
 /* Export is in the last group: there, dim what's beside it instead of the group. */
 :root[data-tour="export"] .top-group:last-child { opacity: 1; }
-:root[data-tour="export"] .top-group:last-child .top-problems { opacity: 0.4; }
+:root[data-tour="export"] .top-group:last-child .top-problems { opacity: 0.32; }
 
 @media (prefers-reduced-motion: no-preference) {
-  :root[data-tour] :is(.workspace-keys, .workspace-inspector, .workspace-channels, .notices, .top-id, .top-group, .top-help, .top-export) { transition: opacity 200ms ease-out, outline-color 200ms ease-out; }
-  :root[data-tour] .workspace-keys::after { transition: border-color 200ms ease-out; }
+  /* Unscoped, so the page also comes back smoothly when the tour ends. */
+  :is(${DIMMED}) { transition: opacity 200ms ease-out; }
   .tour-step:popover-open { transition: opacity 180ms ease-out, translate 300ms var(--spring); }
   @starting-style {
     .tour-step:popover-open { opacity: 0; translate: 0 8px; }
@@ -175,8 +170,6 @@ ${TARGETS} { anchor-name: --tour; opacity: 1; outline-color: var(--ink); }
   .tour-actions button:active { scale: 0.96; }
 }
 @media (forced-colors: active) {
-  ${TARGETS} { outline-color: CanvasText; }
-  :root[data-tour="keys"] .workspace-keys::after { border-color: CanvasText; }
   .tour-count { border-color: CanvasText; }
 }
 `;
@@ -337,12 +330,14 @@ const restoreFocus = (from: Element | null) => {
 /**
  * The tour, rendered beside the editor's top bar and `main` (never inside
  * them: they are made `inert` while it runs). Next and Back walk the steps;
- * Skip tour, Done and Escape end it, and it is then remembered as seen. If
- * the editor goes away mid-tour, the page is put back as it was and the tour
- * is not counted as seen.
+ * Skip tour, Done and Escape end it, and it is then remembered as seen. Files
+ * opened mid-tour (a drop on the window) end it too. If the editor goes away
+ * mid-tour, the page is put back as it was and the tour is not counted as
+ * seen.
  */
 export const Tour = () => {
   const [index, setIndex] = useAtom(stepAtom);
+  const sessionId = useAtomValue(sessionIdAtom);
   const style = useRef<HTMLStyleElement>(null);
   const running = index !== null;
 
@@ -359,9 +354,22 @@ export const Tour = () => {
   const endRef = useRef(end);
   endRef.current = end;
 
-  // Which region is ringed, for the CSS.
+  // Another system was opened under the tour: what it was showing has gone.
+  const session = useRef(sessionId);
+  useEffect(() => {
+    if (session.current === sessionId) return;
+    session.current = sessionId;
+    endRef.current();
+  }, [sessionId]);
+
+  // Which region the step is about, for the CSS; removed with the last step.
   useLayoutEffect(() => {
-    if (index !== null) document.documentElement.dataset.tour = (STEPS[index] as Step).id;
+    if (index === null) return;
+    const root = document.documentElement;
+    root.dataset.tour = (STEPS[index] as Step).id;
+    return () => {
+      delete root.dataset.tour;
+    };
   }, [index]);
 
   // A layout effect: it notes where focus was before the first step takes it.
@@ -384,7 +392,6 @@ export const Tour = () => {
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       for (const el of rest) el.inert = false;
-      delete document.documentElement.dataset.tour;
       restoreFocus(from);
     };
   }, [running]);

@@ -19,9 +19,10 @@ import { Action } from './ui.tsx';
  * the card. Delete is a separate button above that area: quiet until the card
  * is hovered or holds focus, and always there where nothing hovers.
  *
- * The newest session is the one to carry on with: it spans the list, and its
- * picture is the key grid itself, labels and all. Cards lay themselves out by
- * their own width.
+ * The newest session is the one to carry on with: it spans the list, with a
+ * bigger name, an arrow that says it opens, and (when wide enough) its picture
+ * is the key grid itself, labels and all. Cards lay themselves out by their own
+ * width; long file names end in an ellipsis rather than stretch a card.
  *
  * In forced colours the tiles' fills go; their transparent borders are what's
  * left, so an assigned key is still a solid outline and an empty one a dashed.
@@ -39,19 +40,26 @@ const SESS_CSS = `
 .sess-keylabel { display: none; }
 .sess-text { grid-area: text; display: grid; gap: 2px; min-inline-size: 0; }
 .sess-carry { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; font-weight: var(--w-text); line-height: 1.3; }
-.sess-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; font-size: 1.1875rem; line-height: 1.25; }
-.sess-meta { margin: 0; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-text); line-height: 1.4; overflow-wrap: anywhere; }
+.sess-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; font-size: 1.125rem; font-weight: var(--w-strong); line-height: 1.25; }
+.sess-meta { display: flex; min-inline-size: 0; margin: 0; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-text); line-height: 1.4; white-space: nowrap; }
+.sess-sep { flex: none; padding-inline: 0.4em; }
+/* Long file names end in an ellipsis rather than stretch the card; the full names are still read out, and in the tooltip. */
+.sess-from { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .sess-dirty { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-text); letter-spacing: 0; white-space: nowrap; }
-.sess-dot { flex: none; box-sizing: border-box; inline-size: 9px; block-size: 9px; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--k); }
+.sess-dot { flex: none; box-sizing: border-box; inline-size: 8px; block-size: 8px; border: 1.5px solid currentColor; border-radius: 50%; }
 
 .sess-list .sess-open { display: inline; block-size: auto; min-block-size: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; letter-spacing: inherit; text-align: start; overflow-wrap: anywhere; cursor: pointer; }
+/* Tamagui's button sets its own type on the label: the name takes the heading's. */
+.sess-list .sess-open > span { font: inherit; color: inherit; letter-spacing: inherit; }
 .sess-list .sess-open::after { content: ""; position: absolute; inset: 0; border-radius: 20px; }
 .sess-list .sess-open:is(:hover, :active) { background: transparent; }
 .sess-list .sess-open:focus-visible { outline: none; }
 .sess-card:has(.sess-open:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (hover: hover) {
   .sess-card:has(.sess-open:hover) { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--line) 40%, var(--muted)); }
+  .sess-card:has(.sess-open:hover) .sess-go { border-color: var(--ink); background: var(--ink); color: var(--canvas); }
 }
+.sess-go { display: none; }
 
 .sess-list .sess-delete { grid-area: delete; position: relative; z-index: 1; inline-size: max(36px, var(--target)); min-inline-size: 0; block-size: max(36px, var(--target)); padding: 0; color: var(--muted); opacity: 0; }
 .sess-list .sess-delete:is(:hover, :focus-visible) { color: var(--ink); }
@@ -59,19 +67,30 @@ const SESS_CSS = `
 @media (hover: none) {
   .sess-list .sess-delete { opacity: 1; }
 }
+.sess-name { font-weight: var(--w-strong); }
 .sess-bin { display: block; inline-size: 16px; block-size: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 
-/* The one to carry on with. */
-.sess-item[data-first] .sess-row { padding: 18px 12px 18px 22px; gap: 14px 24px; }
+/* Too narrow for the picture beside the words: it goes above them. */
+@container sess (inline-size < 380px) {
+  .sess-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "keys delete" "text text"; align-items: start; }
+}
+
+/* The one to carry on with: bigger, with its keys named and an arrow that says it opens. */
+.sess-item[data-first] .sess-row { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "keys text go delete"; padding: 18px 12px 18px 22px; gap: 14px 20px; }
 .sess-item[data-first] .sess-carry { display: block; }
-.sess-item[data-first] .sess-title { font-size: 1.875rem; line-height: 1.1; }
+.sess-item[data-first] .sess-title { font-size: 1.75rem; font-weight: var(--w-display); line-height: 1.1; }
+.sess-item[data-first] .sess-go { grid-area: go; display: grid; place-items: center; box-sizing: border-box; inline-size: 44px; block-size: 44px; border: 1.5px solid var(--line); border-radius: 50%; color: var(--ink); font-size: 1.125rem; font-weight: var(--w-ui); }
+@container sess (inline-size < 420px) {
+  .sess-item[data-first] .sess-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "keys keys delete" "text text text"; align-items: start; }
+  .sess-item[data-first] .sess-go { display: none; }
+}
 .sess-item[data-first] .sess-text { gap: 3px; }
 @container sess (inline-size >= 420px) {
   .sess-item[data-first] .sess-keys { grid-template-columns: repeat(8, 20px); gap: 4px; }
   .sess-item[data-first] .sess-key { block-size: 20px; border-radius: 6px; }
 }
-@container sess (inline-size >= 760px) {
-  .sess-item[data-first] .sess-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "text keys delete"; }
+@container sess (inline-size >= 960px) {
+  .sess-item[data-first] .sess-row { grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-areas: "text keys go delete"; }
   .sess-item[data-first] .sess-keys { grid-template-columns: repeat(8, minmax(0, 66px)); gap: 5px; }
   .sess-item[data-first] .sess-key { display: flex; align-items: center; block-size: auto; min-block-size: 32px; padding: 3px 9px; border-radius: 10px; color: var(--on-key); }
   .sess-item[data-first] .sess-keylabel { display: block; min-inline-size: 0; overflow: hidden; font-size: 0.8125rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
@@ -80,6 +99,8 @@ const SESS_CSS = `
 
 @media (prefers-reduced-motion: no-preference) {
   .sess-card { transition: box-shadow 140ms ease-out, scale 200ms var(--spring); }
+  .sess-go { transition: background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out, translate 200ms var(--spring); }
+  .sess-card:has(.sess-open:hover) .sess-go { translate: 3px 0; }
   .sess-card:has(.sess-open:active) { scale: 0.99; }
   .sess-list .sess-delete { transition: opacity 120ms ease-out, color 120ms ease-out, background-color 120ms ease-out, scale 200ms var(--spring); }
   .sess-list .sess-delete:active { scale: 0.92; }
@@ -87,7 +108,7 @@ const SESS_CSS = `
 @media (forced-colors: active) {
   .sess-card { border: 1px solid CanvasText; }
   .sess-key[data-empty] { border-style: dashed; }
-  .sess-dot { background: CanvasText; }
+  .sess-go { border-color: CanvasText; }
 }
 `;
 
@@ -184,6 +205,7 @@ const SessionCard = ({ session, first, now, asking, onOpen, onDelete }: SessionC
   const name = nameOf(session);
   const when = editedWhen(session.savedAt, now);
   const saved = new Date(session.savedAt);
+  const from = cameFrom(session);
   return (
     <li className="sess-item" data-first={first ? '' : undefined} data-session={session.id}>
       <article className="card sess-card">
@@ -202,7 +224,7 @@ const SessionCard = ({ session, first, now, asking, onOpen, onDelete }: SessionC
               </Action>
               {session.dirty && (
                 <span className="sess-dirty">
-                  <span className="sess-dot" style={keyStyle(1)} aria-hidden="true" />
+                  <span className="sess-dot" aria-hidden="true" />
                   not exported yet
                 </span>
               )}
@@ -211,10 +233,17 @@ const SessionCard = ({ session, first, now, asking, onOpen, onDelete }: SessionC
               <time dateTime={saved.toISOString()} title={saved.toLocaleString()}>
                 {when}
               </time>
-              {' · '}
-              {cameFrom(session)}
+              <span className="sess-sep">·</span>
+              <span className="sess-from" title={from}>
+                {from}
+              </span>
             </p>
           </div>
+          {first && (
+            <span className="sess-go" aria-hidden="true">
+              →
+            </span>
+          )}
           <Action
             kind="ghost"
             className="sess-delete"
@@ -313,8 +342,9 @@ export const SessionList = ({
       >
         {asked && (
           <>
-            <b>{nameOf(asked)}</b>, edited {editedWhen(asked.savedAt, now)}, will be removed from
-            this browser. This can’t be undone.
+            <strong className="sess-name">{nameOf(asked)}</strong>, edited{' '}
+            {editedWhen(asked.savedAt, now)}, will be removed from this browser. This can’t be
+            undone.
             {asked.dirty && ' It has changes that haven’t been exported.'}
           </>
         )}

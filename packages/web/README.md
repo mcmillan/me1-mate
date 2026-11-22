@@ -36,8 +36,8 @@ carry on, or delete it.
   level for each of its channels. It stays in view beside the keys and
   channels on a wide screen and sits between them on a narrow one.
 - **Top bar**: the wordmark (back to Home), the config's name (the `.ME1`
-  file's name), undo and redo (⌘Z / ⇧⌘Z), Open, New, a `?` that starts the
-  tour, whether the system is ready to export, and Export.
+  file's name), a `?` that starts the tour, undo and redo (⌘Z / ⇧⌘Z), Open,
+  New, whether the system is ready to export, and Export.
 - **Tour**: a four-step walk through keys, channels, the inspector and export.
   It runs the first time you reach the editor and any time from the `?`.
 - **Opening files**: press Open, or drop an `.ME1`, a `.meu`, or both

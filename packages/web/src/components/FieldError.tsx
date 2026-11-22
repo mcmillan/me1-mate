@@ -68,7 +68,7 @@ const ErrorText = ({ id, message }: { id?: string; message: string }) => (
     <SizableText size="xs" color="color-7" shrink={0} role="img" aria-label="Error">
       <WarningIcon />
     </SizableText>
-    <SizableText size="xs" fontWeight="500" color="color">
+    <SizableText size="xs" color="color" style={{ fontWeight: 'var(--w-ui)' }}>
       {message}
     </SizableText>
   </XStack>

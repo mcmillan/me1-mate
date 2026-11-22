@@ -82,18 +82,26 @@ const CSS = `
   background: color-mix(in oklab, currentColor 10%, transparent);
   &&&& { padding: 0; border: 0; }
 }
-.insp .insp-step:hover { background: color-mix(in oklab, currentColor 20%, transparent); }
-.insp .insp-step:active { background: color-mix(in oklab, currentColor 28%, transparent); }
-/* At either end: an outline where the button was, not faded as a whole, so its focus ring stays at full strength. */
+@media (hover: hover) {
+  .insp .insp-step:not([aria-disabled="true"]):hover { background: color-mix(in oklab, currentColor 20%, transparent); }
+}
+.insp .insp-step:not([aria-disabled="true"]):active { background: color-mix(in oklab, currentColor 28%, transparent); }
+/*
+ * At either end the disc goes and the chevron fades: the same button, with
+ * nothing to press. Only its insides fade, so its focus ring stays at full strength.
+ */
 .insp .insp-step[aria-disabled="true"] {
-  background: transparent; color: color-mix(in oklab, var(--insp-on) 36%, transparent); cursor: not-allowed;
-  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--insp-on) 18%, transparent);
+  background: transparent; color: color-mix(in oklab, var(--insp-on) 30%, transparent); cursor: default;
 }
 /* On a key's colour the ring gets a band of the card's colour inside it, so it shows on any of them. */
 .insp .insp-step:focus-visible { box-shadow: 0 0 0 2px var(--card); }
-/* The label, as big as the card allows: six wide letters still fit the narrowest card. */
+/*
+ * The label, as big as the card allows: six wide letters still fit the
+ * narrowest card. Its size is the emphasis, so it takes the strong weight
+ * rather than the display one, which looks heavy this big.
+ */
 .insp-big {
-  margin: 0; font-size: clamp(1.75rem, 13.2cqi, 2.75rem); font-weight: var(--w-display); line-height: 1.08;
+  margin: 0; font-size: clamp(1.75rem, 13.2cqi, 2.75rem); font-weight: var(--w-strong); line-height: 1.08;
   letter-spacing: -0.027em; white-space: nowrap; overflow-x: clip; text-overflow: ellipsis;
 }
 .insp-big[data-long] { font-size: clamp(1.5rem, 9.6cqi, 2.25rem); }
@@ -169,13 +177,13 @@ const CSS = `
 
 /*
  * A group's channels, a row each: the name is the one thing in ink at rest
- * beside its level; the number is quiet, and the way out shows when the row
- * is pointed at or holds focus (always, where there is no hover).
+ * beside its level; the number is quiet, and the way out is faint until the
+ * row is pointed at or holds focus (full strength where there is no hover).
  */
 .insp-members { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none; }
 .insp-row-main {
   display: grid; grid-template-columns: 56px 40px minmax(0, 1fr) auto; align-items: center; column-gap: 6px;
-  min-block-size: max(36px, var(--target));
+  min-block-size: max(32px, var(--target));
 }
 .insp-row-name {
   font-size: 0.84375rem; font-weight: var(--w-ui); line-height: 1.2;
@@ -189,10 +197,13 @@ const CSS = `
   font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1;
   &&&& { padding: 0; border: 0; }
 }
+/* At rest a faint ✕ (still 3:1) says a row can go; pointing at the row or focusing into it brings it up. */
 @media (hover: hover) and (prefers-contrast: no-preference) {
-  .insp-row:not(:hover, :focus-within) .insp-remove { opacity: 0; }
+  .insp-row:not(:hover, :focus-within) .insp-remove { color: color-mix(in oklab, var(--muted) 72%, var(--card)); }
 }
-.insp .insp-remove:hover { background: var(--well); color: var(--ink); }
+@media (hover: hover) {
+  .insp .insp-remove:hover { background: var(--well); color: var(--ink); }
+}
 .insp .insp-remove:active { background: color-mix(in oklab, var(--ink) 14%, var(--well)); color: var(--ink); }
 
 /* Nothing here yet: an open slot, in the key's colour when the key has one. */
@@ -299,6 +310,7 @@ const CSS = `
   .insp-type, .insp-chan, .insp-chip, .insp-invite-mark { border: 1px solid CanvasText; }
   .insp-pill { display: none; }
   .insp :is(.insp-step, .insp-remove) { &&&& { border: 1.5px solid ButtonText; } }
+  .insp .insp-step[aria-disabled="true"] { color: GrayText; &&&& { border-color: GrayText; } }
   .insp .insp-seg[aria-pressed="true"] {
     forced-color-adjust: none; background: Highlight; color: HighlightText;
   }

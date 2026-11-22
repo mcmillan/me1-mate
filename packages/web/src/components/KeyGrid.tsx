@@ -310,7 +310,7 @@ const CSS = `
   background-color: var(--card);
   box-shadow: 0 0 0 1.5px var(--color-9);
   color: var(--color-10);
-  font-size: 0.75rem; line-height: 1; font-weight: var(--w-strong);
+  font-size: 0.75rem; line-height: 1; font-weight: var(--w-ui);
 }
 
 /*
@@ -337,8 +337,8 @@ const CSS = `
   .kg-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }
 @container kg (inline-size >= 664px) and (inline-size < 780px) {
-  .kg-grid { gap: 8px; }
-  .kg-grid .kg-tile { padding-inline: 8px; }
+  .kg-grid { gap: 10px; }
+  .kg-grid .kg-tile { padding-inline: 9px; }
 }
 @container kg (inline-size < 420px) {
   .kg-rows { gap: 12px; }

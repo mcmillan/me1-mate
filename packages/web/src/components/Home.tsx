@@ -33,8 +33,9 @@ const HOME_CSS = `
 
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
 .home-mark { margin: 0 0 0 -0.04em; font-size: clamp(3.75rem, 2.25rem + 7.5vw, 6.5rem); font-weight: var(--w-black); line-height: 0.9; letter-spacing: -0.035em; }
-.home-pitch { max-inline-size: 31ch; margin: 22px 0 0; font-size: clamp(1.125rem, 1rem + 0.5vw, 1.375rem); font-weight: var(--w-text); line-height: 1.4; text-wrap: pretty; }
-.home-pitch span { color: var(--muted); }
+.home-pitch { max-inline-size: 31ch; margin: 22px 0 0; font-size: clamp(1.125rem, 1rem + 0.4vw, 1.25rem); font-weight: var(--w-text); line-height: 1.45; text-wrap: pretty; }
+.home-pitch .home-quiet { color: var(--muted); }
+.home-nw { white-space: nowrap; }
 
 .home-ways { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .home-way { display: grid; grid-template-columns: 11.5rem minmax(0, 1fr); align-items: center; gap: 6px 16px; }
@@ -264,8 +265,9 @@ export const Home = () => {
               <span style={{ color: keyColor(3) }}>2</span>u
             </h1>
             <p className="home-pitch">
-              Set up the keys of an Allen &amp; Heath ME-1 personal mixer, and the channel names of
-              its ME-U hub, in your browser. <span>Your files never leave this computer.</span>
+              Set up the keys of an Allen &amp; Heath <span className="home-nw">ME-1</span> personal
+              mixer, and the channel names of its <span className="home-nw">ME-U</span> hub, in your
+              browser. <span className="home-quiet">Your files never leave this computer.</span>
             </p>
           </div>
           <section aria-labelledby={`${id}-begin`}>

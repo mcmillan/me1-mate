@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom } from 'jotai';
 import { type FocusEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { dismissToastAtom, type Toast, toastsAtom } from '../lib/store.ts';
+import { dismissToastAtom, screenAtom, type Toast, toastsAtom } from '../lib/store.ts';
 import { keyStyle } from '../lib/theme.ts';
 import { Action } from './ui.tsx';
 
@@ -21,8 +21,9 @@ const supportsPopover =
  * dialog or menu opened before it, and nothing light-dismisses it. Without
  * popover support it stays a fixed, z-indexed box (the `:popover-open` rules
  * are dropped). Its padding is the toasts' distance from the window's edges,
- * inside the box so their shadows aren't clipped. Entry and exit fade; a
- * toast also slides in where motion is welcome.
+ * inside the box so their shadows aren't clipped. A toast fades in, and also
+ * slides in where motion is welcome; the region is gone the moment its last
+ * toast is, so a closed region never lingers on the page.
  *
  * A toast is an ink pill, the page's colours the other way round, so its
  * marks are picked for ink: a key's green for done, a key's blue for a note
@@ -34,8 +35,8 @@ const supportsPopover =
 const CSS = `
 .toasts { position: fixed; inset: auto 0 0 0; width: auto; height: auto; max-height: 100dvh; overflow-y: auto; margin: 0; padding: 16px; border: 0; background: transparent; color: inherit; z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; opacity: 1; }
 @media (min-width: 768px) { .toasts { right: auto; padding: 24px; align-items: flex-start; } }
-.toasts[popover] { transition: opacity 160ms ease-out, display 160ms, overlay 160ms; transition-behavior: allow-discrete; }
-.toasts[popover]:not(:popover-open) { display: none; opacity: 0; }
+.toasts[popover] { transition: opacity 160ms ease-out; }
+.toasts[popover]:not(:popover-open), .toasts:empty { display: none; }
 @starting-style { .toasts[popover]:popover-open { opacity: 0; } }
 .toast { box-sizing: border-box; display: flex; align-items: center; gap: 10px; max-inline-size: min(100%, 440px); min-block-size: 46px; padding: 4px 5px 4px 16px; border: 1.5px solid transparent; border-radius: 23px; background: var(--ink); color: var(--canvas); box-shadow: var(--shadow); pointer-events: auto; transition: opacity 160ms ease-out; }
 @starting-style { .toast { opacity: 0; } }
@@ -51,7 +52,7 @@ const CSS = `
   .toast-mark-success, .toast-mark-info { color: color-mix(in oklab, var(--k) 60%, black); }
   .toast-mark-error { color: #e7000b; }
 }
-.toast-text { flex: 1; min-inline-size: 0; padding-block: 6px; font-size: 0.875rem; font-weight: var(--w-strong); line-height: 1.3; overflow-wrap: break-word; }
+.toast-text { flex: 1; min-inline-size: 0; padding-block: 6px; font-size: 0.875rem; font-weight: var(--w-ui); line-height: 1.3; overflow-wrap: break-word; }
 .toast button { min-inline-size: max(34px, var(--target)); min-block-size: max(34px, var(--target)); }
 .toast button.toast-x:focus-visible { background: var(--canvas); outline-offset: 0; }
 .toast button.toast-x:focus-visible * { color: var(--ink); }
@@ -149,7 +150,7 @@ const ToastItem = ({
  * announced with `ariaNotify()`, or a live region where that's missing.
  * Successes dismiss themselves after a few seconds, waiting while hovered or
  * focused; errors and notices stay until closed. Toasts wait while a modal
- * dialog is open.
+ * dialog is open, and those up when the editor goes back to Home are cleared.
  */
 export const Toasts = () => {
   const toasts = useAtomValue(toastsAtom);
@@ -161,10 +162,18 @@ export const Toasts = () => {
   const [liveText, setLiveText] = useState('');
 
   const open = toasts.length > 0 && !modalOpen;
-  // Keep the last toasts in the closing popover so they fade out with it.
-  const lastShown = useRef<readonly Toast[]>([]);
-  if (open) lastShown.current = toasts;
-  const shown = open || !supportsPopover ? toasts : lastShown.current;
+
+  // Leaving the editor for Home: what the toasts said was about the editor's
+  // work, so they go. Toasts raised on Home afterwards stay.
+  const screen = useAtomValue(screenAtom);
+  const lastScreen = useRef(screen);
+  const toastsNow = useRef(toasts);
+  toastsNow.current = toasts;
+  useEffect(() => {
+    const left = lastScreen.current === 'editor' && screen === 'home';
+    lastScreen.current = screen;
+    if (left) for (const t of toastsNow.current) dismiss(t.id);
+  }, [screen, dismiss]);
 
   useLayoutEffect(() => {
     const el = region.current;
@@ -227,7 +236,7 @@ export const Toasts = () => {
         onFocus={onFocus}
         {...(supportsPopover ? ({ popover: 'manual' } as Record<string, string>) : {})}
       >
-        {shown.map((t) => (
+        {toasts.map((t) => (
           <ToastItem key={t.id} toast={t} paused={!open} onDismiss={close} />
         ))}
       </section>

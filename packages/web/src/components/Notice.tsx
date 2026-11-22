@@ -12,13 +12,13 @@ const CSS = `
 .notice button.target { min-block-size: max(38px, var(--target)); }
 .notice-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px 12px; }
 .notice-body { display: grid; gap: 4px; min-inline-size: 0; }
+.notice .notice-title { font-weight: var(--w-strong); }
 .notice-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 0.875rem; font-weight: var(--w-text); line-height: 1.4; overflow-wrap: break-word; }
 .notice-list li { display: block; }
 .notice-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 @container notice (inline-size >= 560px) {
   .notice-row { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .notice-list li { display: block; }
-.notice-actions { grid-column: auto; flex-wrap: nowrap; }
+  .notice-actions { grid-column: auto; flex-wrap: nowrap; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .notice button { transition: scale 200ms var(--spring), background-color 120ms ease-out; }
@@ -57,11 +57,10 @@ export const Notice = ({ actions, children, ...props }: NoticeProps) => (
 export const NoticeTitle = ({ children }: { children: ReactNode }) => (
   <SizableText
     render="h2"
-    className="display"
+    className="display notice-title"
     theme="red"
     color="color-7"
     size="base"
-    fontWeight="700"
     m="0"
   >
     {children}
