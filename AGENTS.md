@@ -117,7 +117,16 @@ make sure every export is described and nothing described is gone.
   (say type in words); selected is an ink ring; focus is the blue `--focus`
   ring (focus put back after a close goes through `returnFocus` in
   `lib/focus.ts`: no ring after a tap, always one after a key); red means a
-  problem. Show little at rest and reveal detail on hover
+  problem. Surfaces have a hierarchy: the inspector (and the phone's key
+  sheet) is the one raised surface, with a shadow; the keys and channels lie
+  flat on the canvas, and radii follow a surface's size and importance rather
+  than one radius everywhere. Labels are sentence case and plainly set: no
+  all-caps or letter-spaced eyebrows, no "A · B · C" meta strings (write a
+  short phrase or separate the parts), no decorative arrows on text (keep
+  the ones that mean something: Export's ↓, ‹ › stepping, the pointer toward
+  Channels). Motion answers an action (a sheet, a dialog, a toast, a pick);
+  Home's one moment of its own is the step pictures acting out once, with no
+  entrance animations. Show little at rest and reveal detail on hover
   and focus (always visible under `hover: none`). Component-specific CSS
   lives in a `<style>` block beside the component, with class names prefixed
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,

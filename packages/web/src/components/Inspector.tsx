@@ -51,6 +51,12 @@ import { Action, Card } from './ui.tsx';
  */
 const CSS = `
 .insp { container: insp / inline-size; position: relative; overflow: hidden; }
+/*
+ * The one raised surface on the page: a hairline and a soft shadow, where the
+ * keys and channels sit on the canvas. The shadow is on the wrapper, which
+ * scrolls in the side column and would clip one on the card.
+ */
+.workspace-inspector:has(> .insp) { border-radius: 24px; box-shadow: var(--shadow); }
 /* A hero without a colour covers the card's hairline, so it's drawn again on top. */
 .insp:has(> .insp-hero[data-plain])::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
@@ -73,13 +79,18 @@ const CSS = `
 }
 .insp-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-block-size: 20px; }
 /*
- * Text that is mostly figures (the eyebrow, the summary, channel numbers) is
- * set in plain ones: the page's slashed zero looks typewritten in small sizes.
+ * Text that is mostly figures (the key's number, the summary, channel numbers)
+ * is set in plain ones: the page's slashed zero looks typewritten in small sizes.
  */
-.insp-eyebrow, .insp-sum, .insp-chip, .insp-row-meta { font-feature-settings: "tnum"; }
-.insp-eyebrow {
-  margin: 0; font-size: 0.6875rem; font-weight: var(--w-ui); line-height: 1.3; letter-spacing: 1px;
-  text-transform: uppercase; color: var(--insp-quiet);
+.insp-which, .insp-sum, .insp-chip, .insp-row-meta { font-feature-settings: "tnum"; }
+/* Which key this is, quietly, and its type as a word beside it, set apart by a thin outline. */
+.insp-which {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 0.875rem; font-weight: var(--w-ui); line-height: 1.3; color: var(--insp-on);
+}
+.insp-kind {
+  padding: 0 7px 1px; border: 1px solid color-mix(in oklab, var(--insp-on) 30%, transparent); border-radius: 6px;
+  font-size: 0.75rem; font-weight: var(--w-text); color: var(--insp-quiet);
 }
 /* Pulled out so two round buttons don't make the top row taller than its text. */
 .insp-steps { display: flex; gap: 4px; margin-block: -6px; margin-inline-end: -6px; }
@@ -210,17 +221,16 @@ const CSS = `
  * "Balance", quieter), the sliders, and the way out in a column of its own so
  * it never covers anything. The level is on the first line and the pan under
  * it, in the same column: the two tracks share both edges, and each value
- * slot is the same fixed width at the end. A header names the column once.
+ * slot is the same fixed width at the end. No header: the readouts (dB, then
+ * C / L 12 / R 30) and the pan's centre-out fill say which is which.
  * Rows are parted by a hairline; the way out is faint until the row is
  * pointed at or holds focus (full strength where there is no hover).
  */
 .insp-members { display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none; }
-.insp-members-head, .insp-row {
+.insp-row {
   --insp-row-x: max(24px, var(--target));
   display: grid; grid-template-columns: 72px minmax(0, 1fr) var(--insp-row-x); column-gap: 6px;
 }
-.insp-members-head { margin-block-end: -2px; }
-.insp-members-head > .insp-hint { grid-column: 2; }
 .insp-row {
   grid-template-areas: "name level x" "meta pan ." "error error error";
   align-items: center; padding-block: 4px 6px;
@@ -360,9 +370,13 @@ const CSS = `
   .insp .insp-step:not([aria-disabled="true"]):active, .insp .insp-remove:active { scale: 0.9; }
   .insp .insp-input { transition: border-color 140ms ease-out; }
   .insp-chan, .insp-chip, .insp-invite, .insp-invite-mark { transition: background-color 260ms ease-out, border-color 260ms ease-out; }
-  /* A channel added to the group slides into the list. */
+  /*
+   * A channel added to the group slides into the list. Only once the list is
+   * live: rows drawn when the key is shown are already in place, so nothing
+   * moves (and nothing is measured mid-slide) when a key is selected.
+   */
   .insp-row { transition: opacity 220ms ease-out, translate 320ms var(--spring); }
-  @starting-style { .insp-row { opacity: 0; translate: -10px 0; } }
+  @starting-style { .insp-members[data-live] .insp-row { opacity: 0; translate: -10px 0; } }
 }
 @keyframes insp-rise { from { opacity: 0; translate: 0 10px; } }
 
@@ -493,41 +507,42 @@ const spokenName = (system: Editable, channel: number): string =>
     isStereo(system, channel) ? ' stereo' : ''
   }`;
 
-/** The line under the big label: what the key plays and how loud, in a few words. */
+/** How loud, as part of a phrase: "at −0.4 dB", or "level off". */
+const atLevel = (level: Parameters<typeof levelText>[0]): string =>
+  level === 'off' ? 'level off' : `at ${levelText(level)}`;
+
+/**
+ * The line under the big label: what the key plays and how loud, as a short
+ * phrase ("7 channels at −0.4 dB", "Kick on channel 1 at 0 dB, muted").
+ */
 const summary = (system: Editable, key: Key, named: boolean): string => {
   // Said where the big label is a stand-in (an unnamed group, a channel number) and not what the ME-1 shows.
-  const standIn = named ? [] : ['no label'];
-  const muted = 'muted' in key && key.muted ? ['muted'] : [];
+  const after = (main: string, muted = 'muted' in key && key.muted === true): string =>
+    [main, ...(muted ? ['muted'] : []), ...(named ? [] : ['no label'])].join(', ');
   switch (key.type) {
     case 'unassigned':
-      return 'no channel assigned';
+      return 'No channel assigned';
     case 'auto':
-      return ['next free channel', levelText(key.level), ...muted].join(' · ');
-    case 'channel':
-      return [
-        `Ch ${numbersOf(system, key.channel)}`,
-        system.channels[key.channel - 1]?.name,
-        ...standIn,
-        levelText(key.level),
-        ...muted,
-      ]
-        .filter(Boolean)
-        .join(' · ');
+      return after(`The next free channel ${atLevel(key.level)}`);
+    case 'channel': {
+      const name = system.channels[key.channel - 1]?.name;
+      const where = `channel ${numbersOf(system, key.channel)}`;
+      return after(
+        `${name ? `${name} on ${where}` : `Channel ${numbersOf(system, key.channel)}`} ${atLevel(key.level)}`,
+      );
+    }
     case 'group': {
       const count = key.members.length;
-      return [
-        ...standIn,
-        count === 0 ? 'no channels yet' : `${count} channel${count === 1 ? '' : 's'}`,
-        levelText(key.level),
-        ...muted,
-      ].join(' · ');
+      return after(
+        `${count === 0 ? 'No channels yet' : `${count} channel${count === 1 ? '' : 's'}`} ${atLevel(key.level)}`,
+      );
     }
     case 'aux':
-      return ['Aux in', ...standIn, levelText(key.level), ...muted].join(' · ');
+      return after(`The Aux Input ${atLevel(key.level)}`);
     case 'tone':
-      return ['1 kHz tone', ...standIn, levelText(key.level), ...muted].join(' · ');
+      return after(`A 1 kHz tone ${atLevel(key.level)}`);
     case 'unknown':
-      return [...standIn, 'kept as it is'].join(' · ');
+      return named ? 'Kept as it is' : 'Kept as it is, no label';
   }
 };
 
@@ -568,15 +583,17 @@ const Hero = ({
   return (
     <div className="insp-hero" data-plain={plain ? '' : undefined}>
       <div className="insp-hero-top">
-        <h2 className="insp-eyebrow">
+        <h2 className="insp-which">
           <span className="insp-sr">
             Key {n}
             {empty ? '' : `: ${KEY_TYPE_LABEL[key.type]}`}
           </span>
-          <span aria-hidden="true">
-            Key {String(n).padStart(2, '0')}
-            {empty ? '' : ` · ${KEY_TYPE_LABEL[key.type]}`}
-          </span>
+          <span aria-hidden="true">Key {n}</span>
+          {!empty && (
+            <span className="insp-kind" aria-hidden="true">
+              {KEY_TYPE_LABEL[key.type]}
+            </span>
+          )}
         </h2>
         <div className="insp-steps">
           <Step label="Previous key" back off={index <= 0} onPress={() => onStep(index - 1)} />
@@ -912,6 +929,9 @@ const PlaysGroup = ({
   const root = useRef<HTMLDivElement>(null);
   /** The row a channel was just removed from with its button, to keep focus in the list. */
   const removedAt = useRef<number | null>(null);
+  /** Set after the first render: from then on a new row is a channel just added, and slides in. */
+  const [live, setLive] = useState(false);
+  useEffect(() => setLive(true), []);
   const members = key.type === 'group' ? key.members : [];
   const n = index + 1;
 
@@ -936,8 +956,9 @@ const PlaysGroup = ({
     >
       <div className="insp-field-head">
         <Sub>
-          Channels
-          {members.length > 0 && <small>{` · ${members.length}`}</small>}
+          {members.length === 0
+            ? 'Channels'
+            : `${members.length} channel${members.length === 1 ? '' : 's'}`}
         </Sub>
       </div>
       {members.length > 0 && where !== 'below' && (
@@ -968,11 +989,8 @@ const PlaysGroup = ({
         </div>
       ) : (
         <>
-          <div className="insp-members-head" aria-hidden="true">
-            <span className="insp-hint">Level, with pan below</span>
-          </div>
           {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops the list role from a list without markers */}
-          <ul className="insp-members" role="list">
+          <ul className="insp-members" role="list" data-live={live ? '' : undefined}>
             {members.map((m, j) => {
               const name = system.channels[m.channel - 1]?.name;
               const numbers = numbersOf(system, m.channel);

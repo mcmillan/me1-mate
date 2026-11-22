@@ -147,8 +147,20 @@ const checkSliders = async (page: Page, open: (i: number) => Promise<void>) => {
   await open(0);
   const rows = page.locator('.insp-row').filter({ visible: true });
   await expect(rows).toHaveCount(5);
-  const levels = await boxes('.insp-row-level .fader-groove');
-  const pans = await boxes('.insp-row-pan .fader-groove');
+  // One read for both, so the two lists are the same moment.
+  const { levels, pans } = await page.evaluate(() => {
+    const get = (sel: string) =>
+      [...document.querySelectorAll<HTMLElement>(sel)]
+        .filter((el) => el.checkVisibility())
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          return { left: Math.round(r.left), right: Math.round(r.right), height: r.height };
+        });
+    return {
+      levels: get('.insp-row-level .fader-groove'),
+      pans: get('.insp-row-pan .fader-groove'),
+    };
+  });
   expect(levels).toHaveLength(5);
   expect(pans, 'each row has its pan under its level, the same size').toEqual(levels);
   for (const box of levels) expect(box, 'every row lines up').toEqual(levels[0]);
@@ -158,9 +170,14 @@ const checkSliders = async (page: Page, open: (i: number) => Promise<void>) => {
     );
   }
   await expect(
-    page.locator('.insp-members-head').filter({ visible: true }),
-    'one header names the column',
-  ).toHaveText('Level, with pan below');
+    page.getByText('Level, with pan below'),
+    'no column header: the readouts say which slider is which',
+  ).toHaveCount(0);
+  const sliders = rows.first().getByRole('slider');
+  await expect(sliders.nth(0), 'each slider says what it is').toHaveAccessibleName(
+    'Kick 1 level in key 1',
+  );
+  await expect(sliders.nth(1)).toHaveAccessibleName('Kick 1 pan in key 1');
   await expect(rows.nth(4), 'a stereo pair says its pan is a balance').toContainText('Balance');
 };
 

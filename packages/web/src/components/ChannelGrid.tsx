@@ -52,7 +52,7 @@ import {
 } from '../lib/store.ts';
 import { keyColor, keyStyle } from '../lib/theme.ts';
 import { FieldError, useTextFieldError } from './FieldError.tsx';
-import { Action, Card, PanelTitle } from './ui.tsx';
+import { Action, Panel, PanelTitle } from './ui.tsx';
 
 /** The markers of the key being pointed at, on any channel: `data-spot` on the grid says which key. */
 const SPOT_TAGS = Array.from(
@@ -66,7 +66,8 @@ const SPOT_MARKERS = SPOT_TAGS.replaceAll(',', ' .ch-face,').concat(' .ch-face')
 /*
  * Selectors start at `.ch-root` so they outrank Tamagui's one-class atomic
  * rules. The neutrals are the page's (`--card`, `--well`, `--ink`, `--muted`,
- * `--line` in styles.css): the region is a card and each pair a well in it.
+ * `--line` in styles.css): the region lies flat on the canvas, as the keys do,
+ * and each pair is a well in it.
  * `--k` is a key's colour, set with `keyStyle` on whatever wears it, and
  * `--ch-sel` the selected key's.
  */
@@ -84,10 +85,6 @@ const CSS = `
   /* What a pair's controls sit on, for the edge that lifts a marker off it. */
   --ch-under: var(--well);
   gap: 12px;
-  padding: 16px 16px 18px;
-}
-@media (width < 640px) {
-  .ch-root { padding: 14px 12px; }
 }
 @media (pointer: coarse) {
   .ch-root { --ch-chip: 44px; --ch-h: 56px; --ch-mid: 44px; --ch-pair-min: 300px; }
@@ -1660,7 +1657,7 @@ export const ChannelGrid = ({
   }
 
   return (
-    <Card render="section" className="ch-root" aria-labelledby={titleId}>
+    <Panel render="section" className="ch-root" aria-labelledby={titleId}>
       <style>{CSS}</style>
       <div className="ch-head">
         <PanelTitle id={titleId} className={variant === 'names' ? 'display ch-vh' : 'display'}>
@@ -1674,8 +1671,8 @@ export const ChannelGrid = ({
           )}
         </p>
         <p className="ch-tip">
-          Names up to {NAME_MAX} characters
-          <span className="ch-tip-more"> · Enter for the next</span>
+          Up to {NAME_MAX} characters
+          <span className="ch-tip-more">, then Enter for the next</span>
         </p>
       </div>
       <div className="ch-grid" {...gridProps}>
@@ -1715,6 +1712,6 @@ export const ChannelGrid = ({
           onDismiss={() => setTip(null)}
         />
       )}
-    </Card>
+    </Panel>
   );
 };

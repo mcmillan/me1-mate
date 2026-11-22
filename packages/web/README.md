@@ -68,7 +68,9 @@ the same parts arranged for its screen; see below):
   centre out, both in the key's colour, and each has a tick (0 dB, centre).
   A group's channels are a grid: the name and number (and "Balance" for a
   stereo pair), the level with the pan under it in the same column, and the
-  remove ✕ in a column of its own.
+  remove ✕ in a column of its own. There's no column header: the readouts
+  (dB, then `C` / `L 12` / `R 30`) say which slider is which, and each has
+  its own accessible name ("Kick 1 level in key 1", "Kick 1 pan in key 1").
 - **Mute**: a toggle beside the level; a muted key's tile shows a crossed-out
   speaker (and the word where there's room) and says "muted" to screen
   readers.

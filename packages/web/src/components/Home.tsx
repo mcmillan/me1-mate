@@ -22,9 +22,10 @@ import { Wordmark } from './Wordmark.tsx';
  * technology, and their fills are backed by transparent borders so the shapes
  * survive forced colours.
  *
- * Motion is one gentle entrance, and each picture acting out its step once:
- * the ring lands on the key, the chips take its colour, the fader comes up.
- * None of it runs under reduced motion, and nothing waits on it.
+ * The page itself arrives still. The one moment of motion is the pictures
+ * acting out the steps once, in order: the ring lands on the key, the chips
+ * take its colour, the fader comes up. None of it runs under reduced motion,
+ * and nothing waits on it.
  */
 const HOME_CSS = `
 .home { box-sizing: border-box; display: flex; flex-direction: column; gap: 40px; inline-size: 100%; max-inline-size: 1088px; min-block-size: 100dvh; margin-inline: auto; padding: clamp(28px, 7dvh, 80px) 16px 20px; }
@@ -52,7 +53,7 @@ const HOME_CSS = `
 @media (hover: hover) {
   .home-where summary:hover { color: var(--ink); }
 }
-.home-where dl { display: grid; gap: 12px; max-inline-size: 52ch; margin: 6px 0 0; padding: 14px 18px; border-radius: 16px; background: var(--well); }
+.home-where dl { display: grid; gap: 12px; max-inline-size: 52ch; margin: 6px 0 0; padding: 14px 18px; border-radius: 12px; background: var(--well); }
 .home-where dt { font-weight: var(--w-strong); }
 .home-where dd { margin: 0; color: var(--muted); font-weight: var(--w-text); text-wrap: pretty; }
 .home-where b { color: var(--ink); font-weight: var(--w-strong); }
@@ -67,7 +68,7 @@ const HOME_CSS = `
 .home-step p { max-inline-size: 40ch; margin: 0; color: var(--muted); font-size: 0.875rem; font-weight: var(--w-text); line-height: 1.45; text-wrap: pretty; }
 
 /* The pictures. */
-.home-art { box-sizing: border-box; display: grid; place-items: center; block-size: 132px; padding: 16px 22px; border: 1.5px solid transparent; border-radius: 20px; background: var(--well); user-select: none; }
+.home-art { box-sizing: border-box; display: grid; place-items: center; block-size: 132px; padding: 16px 22px; border: 1.5px solid transparent; border-radius: 12px; background: var(--well); user-select: none; }
 .home-tiles { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; inline-size: 100%; max-inline-size: 268px; }
 .home-tile { position: relative; box-sizing: border-box; aspect-ratio: 1; border: 1.5px solid transparent; border-radius: 8px; background: var(--k); }
 .home-tile[data-empty] { border-color: color-mix(in oklab, var(--line) 55%, var(--muted)); background: transparent; }
@@ -114,10 +115,6 @@ const HOME_CSS = `
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .home-hero > *, .home-main > section, .home-foot { animation: home-in 480ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
-  .home-hero > :nth-child(2) { animation-delay: 60ms; }
-  .home-main > section { animation-delay: 120ms; }
-  .home-main > section ~ section, .home-foot { animation-delay: 180ms; }
   .home .home-go { transition: scale 200ms var(--spring), background-color 120ms ease-out, border-color 120ms ease-out; }
   .home .home-go:active { scale: 0.96; }
   .home-where summary { transition: color 120ms ease-out; }
