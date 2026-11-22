@@ -11,12 +11,13 @@ import {
   resetAtom,
   undoAtom,
 } from '../lib/store.ts';
-import { keyColor, keyStyle } from '../lib/theme.ts';
+import { keyStyle } from '../lib/theme.ts';
 import { ExportMenu } from './ExportMenu.tsx';
 import { chooseFiles } from './OpenFiles.tsx';
 import { ProblemsButton } from './ProblemsButton.tsx';
 import { startTourAtom } from './Tour.tsx';
 import { Action } from './ui.tsx';
+import { Wordmark } from './Wordmark.tsx';
 
 const NATIVE_FOCUSGROUP = 'focusGroup' in HTMLElement.prototype;
 const NATIVE_SCROLL_STATE = CSS.supports('container-type', 'scroll-state');
@@ -59,8 +60,7 @@ const CSS_TEXT = `
 .top-bar.top-scrolled::after { opacity: 1; }
 .top-row { box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; inline-size: 100%; max-inline-size: 1480px; min-block-size: var(--topbar); margin-inline: auto; padding: 6px 12px; }
 .top-id { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
-.top-brand { flex: none; box-sizing: border-box; display: flex; align-items: center; min-block-size: max(38px, var(--target)); margin: 0 -8px; padding: 0 8px; border: 0; border-radius: 12px; background: transparent; color: inherit; cursor: pointer; font-size: 1.625rem; font-weight: var(--w-black); line-height: 1; white-space: nowrap; }
-.top-brand > span { display: block; }
+.top-brand { flex: none; box-sizing: border-box; display: flex; align-items: center; min-block-size: max(38px, var(--target)); margin: 0 -8px; padding: 0 8px; border: 0; border-radius: 12px; background: transparent; color: inherit; cursor: pointer; font-size: 1.625rem; line-height: 1; white-space: nowrap; }
 .top-tools { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; row-gap: 6px; min-inline-size: 0; }
 .top-group { display: flex; align-items: center; gap: 2px; }
 .top-group:last-child { gap: 8px; }
@@ -173,8 +173,7 @@ const CSS_TEXT = `
 const HOME = 'Home';
 
 /**
- * The wordmark is the way home: a button named for where it goes, its two 2s
- * in two of the keys' colours. The page's heading is beside it, for screen
+ * The wordmark is the way home: a button named for where it goes. The page's heading is beside it, for screen
  * readers only, so the heading isn't named "Home".
  */
 const Brand = ({ tip }: { readonly tip: string }) => {
@@ -189,11 +188,7 @@ const Brand = ({ tip }: { readonly tip: string }) => {
         onClick={() => goHome()}
         {...((NATIVE_HINTS ? { interestfor: tip } : { title: HOME }) as Record<string, string>)}
       >
-        <span aria-hidden="true">
-          <span style={{ color: keyColor(0) }}>2</span>
-          me
-          <span style={{ color: keyColor(3) }}>2</span>u
-        </span>
+        <Wordmark />
       </button>
     </>
   );

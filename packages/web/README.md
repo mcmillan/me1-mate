@@ -83,6 +83,7 @@ src
 ├── components/
 │   ├── Home.tsx, SessionList.tsx    the home screen and the list of sessions
 │   ├── TopBar.tsx       wordmark, config name, undo/redo, open, new, tour, problems, export
+│   ├── Wordmark.tsx     the 2me2u logo, its 2s on tilted keys
 │   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout
 │   ├── Inspector.tsx    editor for the selected key
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key

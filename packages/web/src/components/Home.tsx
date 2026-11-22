@@ -2,11 +2,12 @@ import { useSetAtom } from 'jotai';
 import { type CSSProperties, type ReactNode, useId, useRef } from 'react';
 import type { TamaguiElement } from 'tamagui';
 import { resetAtom, startExampleAtom } from '../lib/store.ts';
-import { keyColor, keyStyle } from '../lib/theme.ts';
+import { keyStyle } from '../lib/theme.ts';
 import { LoadNotice } from './LoadNotice.tsx';
 import { chooseFiles } from './OpenFiles.tsx';
 import { SessionList } from './SessionList.tsx';
 import { Action } from './ui.tsx';
+import { Wordmark } from './Wordmark.tsx';
 
 /**
  * The front door is one centred column on the canvas: the wordmark and what
@@ -32,7 +33,7 @@ const HOME_CSS = `
 .home-sr { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
-.home-mark { margin: 0 0 0 -0.04em; font-size: clamp(3.75rem, 2.25rem + 7.5vw, 6.5rem); font-weight: var(--w-black); line-height: 0.9; letter-spacing: -0.035em; }
+.home-mark { margin: 0 0 0.18em; font-size: clamp(3.5rem, 2.25rem + 6.5vw, 6rem); line-height: 1; }
 .home-pitch { max-inline-size: 31ch; margin: 22px 0 0; font-size: clamp(1.125rem, 1rem + 0.4vw, 1.25rem); font-weight: var(--w-text); line-height: 1.45; text-wrap: pretty; }
 .home-pitch .home-quiet { color: var(--muted); }
 .home-nw { white-space: nowrap; }
@@ -261,8 +262,8 @@ export const Home = () => {
         <div className="home-hero">
           <div>
             <h1 className="display home-mark">
-              <span style={{ color: keyColor(0) }}>2</span>me
-              <span style={{ color: keyColor(3) }}>2</span>u
+              <Wordmark />
+              <span className="home-sr">2me2u</span>
             </h1>
             <p className="home-pitch">
               Set up the keys of an Allen &amp; Heath <span className="home-nw">ME-1</span> personal
@@ -352,12 +353,15 @@ export const Home = () => {
       </main>
       <footer className="home-foot">
         <p>
-          2me2u is not affiliated with Allen &amp; Heath. Set in{' '}
-          <a href="https://allo.joshpuckett.me/" target="_blank" rel="noreferrer">
-            Allo
-          </a>{' '}
-          by Josh Puckett, under the{' '}
-          <a href={`${import.meta.env.BASE_URL}fonts/Allo-OFL.txt`}>SIL Open Font License</a>.
+          Made by{' '}
+          <a href="https://joshmcmillan.com" target="_blank" rel="noreferrer">
+            Josh McMillan
+          </a>
+          . The code is on{' '}
+          <a href="https://github.com/mcmillan/2me2u" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          . Not affiliated with Allen &amp; Heath.
         </p>
       </footer>
     </div>

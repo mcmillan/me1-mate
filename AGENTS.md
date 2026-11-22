@@ -98,7 +98,7 @@ make sure every export is described and nothing described is gone.
   and focus (always visible under `hover: none`). Component-specific CSS
   lives in a `<style>` block beside the component, with class names prefixed
   by it (`kg-`, `ch-`, `insp-`, `top-`, `fader-`, `notice-`, `home-`,
-  `sess-`, `tour-`).
+  `sess-`, `tour-`, `wm-`).
 - Everything runs in the browser; nothing is uploaded.
 - Use `Action` (`components/ui.tsx`) for every button: `primary` is the ink
   pill, `subtle` the outlined pill, `ghost` chrome-less.

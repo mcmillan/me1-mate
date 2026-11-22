@@ -410,7 +410,7 @@ const summary = (system: Editable, key: Key, named: boolean): string => {
   const standIn = named ? [] : ['no label'];
   switch (key.type) {
     case 'unassigned':
-      return 'nothing plays yet';
+      return 'no channel assigned';
     case 'auto':
       return ['next free channel', levelText(key.level)].join(' · ');
     case 'channel':
