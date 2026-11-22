@@ -57,10 +57,18 @@ the same parts arranged for its screen; see below):
   counts steps from the centre, `L 12`, `C`, `R 30`: the steps are the
   ME-1's, but showing them that way is this editor's choice, not something
   read from the ME-1's screen. Double-click the thumb, press `C`, or use
-  Centre to centre it. A tone and a group's master have no pan.
+  Centre (in a group's row, press the readout) to centre it. A tone and a
+  group's master have no pan.
 - **Level**: the fader runs from off to the most an ME-1 saves (+9.6 dB on
   this scale, the top of its bar), so nothing it writes is beyond what the
   hardware writes.
+- **One slider**: level and pan are the same control, with the same track,
+  thumb and edges, and a readout in a fixed-width slot at the end; they
+  differ by meaning. The level fills from off to the thumb, the pan from the
+  centre out, both in the key's colour, and each has a tick (0 dB, centre).
+  A group's channels are a grid: the name and number (and "Balance" for a
+  stereo pair), the level with the pan under it in the same column, and the
+  remove ✕ in a column of its own.
 - **Mute**: a toggle beside the level; a muted key's tile shows a crossed-out
   speaker (and the word where there's room) and says "muted" to screen
   readers.

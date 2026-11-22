@@ -10,6 +10,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -18,6 +19,14 @@ import {
 import { Input, type TamaguiElement } from 'tamagui';
 import { panSpoken, panText } from '../lib/edit.ts';
 import { Action } from './ui.tsx';
+
+/**
+ * Where a slider sits. `field` is a field of its own in the inspector: a head
+ * row (its label, and an action at the far end), the track with its value
+ * beside it, and a scale under the track. `row` is a group member's line: the
+ * track and its value only, so a level and a pan stacked in one row line up.
+ */
+export type SliderVariant = 'field' | 'row';
 
 export interface FaderProps {
   readonly value: Level | undefined;
@@ -29,8 +38,13 @@ export interface FaderProps {
   readonly onChange: (level: Level, how: { readonly merge: boolean }) => void;
   /** Accessible name, e.g. "Key 3 level". */
   readonly label: string;
-  /** A thinner track and a smaller thumb, without the scale, the 0 dB notch or a unit, for group member rows. */
-  readonly compact?: boolean;
+  readonly variant?: SliderVariant;
+  /** The field's label, at the start of the head row (`field` only). */
+  readonly title?: ReactNode;
+  /** An action at the end of the head row, such as Mute (`field` only). */
+  readonly aside?: ReactNode;
+  /** The core's issue path for the level, set on the track and its readout. */
+  readonly issuePath?: string;
 }
 
 /**
@@ -110,77 +124,102 @@ const stepped = (level: Level, step: number): Level => {
   return clamp(grid);
 };
 
-/**
- * The marks under the full-size fader: its two ends, and 0 dB under the notch
- * in the track. The readout says the rest.
- */
-const TICKS: readonly (readonly [db: Level, label: string])[] = [
-  ['off', 'off'],
-  [0, '0'],
-  [LEVEL_MAX, `+${(Math.round(LEVEL_MAX * 10) / 10).toFixed(1)}`],
+/** The marks under a level field's track: its two ends, and 0 dB at the tick in the track. */
+const LEVEL_MARKS: readonly (readonly [at: number, label: string])[] = [
+  [0, 'off'],
+  [levelPosition(0), '0'],
+  [1, `+${(Math.round(LEVEL_MAX * 10) / 10).toFixed(1)}`],
 ];
 
-/** The thumb's diameter in px: the pointer handling needs it, and the CSS takes it from here. */
-const THUMB = { full: 22, compact: 12 } as const;
+/** The marks under a pan field's track: hard left, centre at the tick, hard right. */
+const PAN_MARKS: readonly (readonly [at: number, label: string])[] = [
+  [0, 'L'],
+  [(PAN_CENTRE - PAN_MIN) / (PAN_MAX - PAN_MIN), 'C'],
+  [1, 'R'],
+];
 
-/** The native range's integer steps across the travel; positions map onto these. */
+/** The thumb's diameter in px, the same on every slider: the pointer handling needs it, and the CSS takes it from here. */
+const THUMB = 16;
+
+/** The native range's integer steps across the level's travel; positions map onto these. */
 const STEPS = 1000;
 
 const stepOf = (level: Level) => Math.round(levelPosition(level) * STEPS);
 
 /**
- * The native range keeps its semantics, focus and pointer handling; only its
- * track and thumb are restyled. The thick track, its fill and the 0 dB notch
- * are drawn behind it: the fill wears the key's colour (`--k`, set by
- * whatever the fader sits in) and is ink where there is none. The thumb is a
- * round ink knob with a halo of the surface colour, so it reads on the fill.
+ * Every slider here is the same: a native range over a groove, a fill and a
+ * tick that are drawn behind it, and a round ink thumb with a halo of the
+ * surface colour so it reads on the fill. The range keeps its semantics,
+ * focus and pointer handling. Level and pan differ only in meaning: the
+ * level's fill runs from off up to the thumb and its tick marks 0 dB; the
+ * pan's fill runs from the centre out to the thumb and its tick marks the
+ * centre. The fill wears the key's colour (`--k`, set by whatever the slider
+ * sits in), ink where there is none.
+ *
+ * Each sits in a line of two columns, the track and a value slot of a fixed
+ * width (`--fader-out`), so sliders of either kind stacked in one container
+ * share both edges and nothing moves as the value's text changes. In a field
+ * the head row above has the label and an action (Mute, Centre), and a quiet
+ * scale sits under the track.
  *
  * The range is as wide as the track, so the thumb's centre travels from half
- * a thumb inside one end to half a thumb inside the other; the fill, the
- * notch and the scale are placed on that same travel. It is as tall as a
- * press target (`--target`: taller for fingers).
+ * a thumb inside one end to half a thumb inside the other; the fill, the tick
+ * and the scale are placed on that same travel. It is as tall as a press
+ * target (`--target`: taller for fingers).
  *
  * WebKit and Firefox pseudo-elements stay in separate rules, since a browser
  * drops a whole rule over a pseudo-element it doesn't know.
  *
  * The focus ring is drawn around the whole track (`.fader-track::after`),
- * clear of the thumb and its halo; the scale starts below it.
+ * clear of the thumb and its halo.
  *
  * Tamagui's own border and padding classes repeat themselves up to four
- * times; `&&&&` matches that where the readout sets them.
+ * times; `&&&&` matches that where the readout and the buttons set them.
  *
  * In forced colours author backgrounds and shadows go, so the track, the fill,
- * the notch and the thumb are given system colours there.
+ * the tick and the thumb are given system colours there.
  */
 const CSS = `
 .fader-root {
-  --fader-thumb: ${THUMB.full}px; --fader-groove: 10px; --fader-halo: 3px;
+  --fader-thumb: ${THUMB}px; --fader-groove: 6px; --fader-halo: 2px;
   --fader-fill: var(--k, var(--ink));
   --fader-hit: max(calc(var(--fader-thumb) + 2 * var(--fader-halo)), var(--target, 24px));
   --fader-span: calc(100% - var(--fader-thumb));
-  display: flex; align-items: flex-start; gap: 10px; inline-size: 100%;
+  --fader-out: 5.375rem;
+  display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 2px; inline-size: 100%;
 }
-.fader-root[data-compact] {
-  --fader-thumb: ${THUMB.compact}px; --fader-groove: 4px; --fader-halo: 2px;
-  align-items: center; gap: 6px;
+.fader-root[data-variant="row"] { --fader-out: 3.5rem; }
+
+/* The head: the label at the start, an action at the end, both on one line. */
+.fader-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-block-size: max(28px, var(--target, 24px));
 }
-.fader-travel { flex: 1 1 0; min-inline-size: 120px; }
-.fader-root[data-compact] .fader-travel { min-inline-size: 72px; }
+.fader-line {
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--fader-out); column-gap: 8px; align-items: start;
+}
+.fader-travel { min-inline-size: 0; }
 .fader-track { position: relative; block-size: var(--fader-hit); }
-.fader-groove, .fader-fill, .fader-zero {
+.fader-groove, .fader-fill, .fader-tick {
   position: absolute; inset-block-start: calc(50% - var(--fader-groove) / 2);
   block-size: var(--fader-groove); border-radius: 999px; pointer-events: none;
 }
 /* A well with a hairline edge, so the travel still to go shows on the card in both schemes. */
 .fader-groove { inset-inline: 0; background: var(--well); box-shadow: inset 0 0 0 1.5px var(--line); }
 .fader-fill {
-  inset-inline-start: 0; background: var(--fader-fill);
-  inline-size: calc(var(--fader-thumb) / 2 + var(--fader-at) * var(--fader-span));
+  inset-inline-start: calc(var(--fader-thumb) / 2 + var(--fader-from) * var(--fader-span));
+  inline-size: calc((var(--fader-to) - var(--fader-from)) * var(--fader-span));
 }
-/* Where 0 dB is, on the full-size fader: a notch in the track that shows through the fill as well. */
-.fader-zero {
-  inset-inline-start: calc(var(--fader-thumb) / 2 + var(--fader-zero-at) * var(--fader-span) - 1px);
-  inline-size: 2px; background: color-mix(in oklab, var(--ink) 34%, transparent);
+/* The level's fill starts at the groove's end, so off is an empty groove and the lowest level a sliver. */
+.fader-fill[data-from-end] {
+  inset-inline-start: 0; inline-size: calc(var(--fader-thumb) / 2 + var(--fader-to) * var(--fader-span));
+}
+.fader-fill { background: var(--fader-fill); }
+/* 0 dB on a level, the centre on a pan: a tick through the groove that shows through the fill as well. */
+.fader-tick {
+  inset-block-start: calc(50% - var(--fader-groove) / 2 - 3px); block-size: calc(var(--fader-groove) + 6px);
+  inset-inline-start: calc(var(--fader-thumb) / 2 + var(--fader-tick-at) * var(--fader-span) - 1px);
+  inline-size: 2px; border-radius: 1px; background: color-mix(in oklab, var(--ink) 40%, transparent);
 }
 .fader {
   -webkit-appearance: none; appearance: none; position: absolute;
@@ -212,12 +251,12 @@ const CSS = `
 
 /*
  * The scale: one quiet row, each mark centred on its place in the travel, the
- * ends flush with the track's. Figures here and in the readout are tabular
+ * ends flush with the track's. Figures here and in the readouts are tabular
  * but plain: the page's slashed zero looks typewritten at this size.
  */
-.fader-scale, .fader-root .fader-readout { font-feature-settings: "tnum"; }
+.fader-scale, .fader-root .fader-readout, .fader-pan-out { font-feature-settings: "tnum"; }
 .fader-scale {
-  display: grid; margin-block-start: 3px; margin-inline: calc(var(--fader-thumb) / 2);
+  display: grid; margin-inline: calc(var(--fader-thumb) / 2);
   font-size: 0.6875rem; font-weight: var(--w-text); line-height: 1.2; color: var(--muted);
   user-select: none; -webkit-user-select: none;
 }
@@ -231,51 +270,58 @@ const CSS = `
 .fader-mark:first-child:dir(rtl) { translate: calc(var(--fader-thumb) / 2) 0; }
 .fader-mark:last-child:dir(rtl) { translate: calc(100% - var(--fader-thumb) / 2) 0; }
 
-/* The level, typed: a number that shows it's a field when pointed at or focused. */
-.fader-out { display: flex; align-items: center; gap: 7px; flex: none; min-block-size: var(--fader-hit); }
+/*
+ * The value slot, a fixed width at the end of the line: the level typed in a
+ * field that shows it's a field when pointed at or focused, with its unit in
+ * a field; the pan's steps from the centre. Both end at the slot's end.
+ */
+.fader-out {
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  min-inline-size: 0; block-size: var(--fader-hit);
+}
 .fader-root .fader-readout {
-  inline-size: calc(6ch + 12px); block-size: max(28px, var(--target, 24px)); min-block-size: 0;
-  border-radius: 10px; background: transparent; color: var(--ink);
-  font-size: 0.875rem; font-weight: var(--w-ui); line-height: 1.2; text-align: end;
-  &&&& { padding: 0 3px 0 5px; border: 1.5px solid transparent; }
+  flex: 1 1 0; min-inline-size: 0; block-size: max(26px, var(--target, 24px)); min-block-size: 0;
+  border-radius: 8px; background: transparent; color: var(--ink);
+  font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1.2; text-align: end;
+  &&&& { padding: 0 3px 0 4px; border: 1.5px solid transparent; }
   &&&&:hover { border-color: var(--line); }
 }
 .fader-root .fader-readout:hover { background: var(--well); }
 .fader-root .fader-readout:focus { background: var(--well); }
-.fader-root .fader-readout:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.fader-root[data-compact] .fader-readout { font-size: 0.8125rem; block-size: max(24px, var(--target, 24px)); }
-.fader-unit { font-size: 0.75rem; font-weight: var(--w-text); color: var(--muted); }
+.fader-root .fader-readout:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.fader-unit { flex: none; font-size: 0.75rem; font-weight: var(--w-text); color: var(--muted); }
+/* The pan's value, set to end where the level's figures end above it (the level's unit is beside them). */
+.fader-pan-out {
+  font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1.2; text-align: end; color: var(--ink);
+  white-space: nowrap; user-select: none; -webkit-user-select: none;
+}
+.fader-root[data-variant="field"] .fader-pan-out { padding-inline-end: calc(1.5ch + 9px); }
 
 /*
- * Pan: the fill runs from the centre notch to the thumb, so centre is no fill
- * at all. The readout says L, C or R and the steps; the centre button beside
- * it is faint until the row is pointed at or holds focus (full strength where
- * there is no hover), and faded out when the pan is already centred.
+ * Centre, in a pan field's head: a small outlined pill like Mute in the level's.
+ * In a member's line the value itself is the button. At the centre already
+ * there is nothing to do: the pill fades, the value is just a quiet C.
  */
-.fader-fill[data-pan] {
-  inset-inline-start: calc(var(--fader-thumb) / 2 + var(--fader-from) * var(--fader-span));
-  inline-size: calc((var(--fader-to) - var(--fader-from)) * var(--fader-span));
-}
-.fader-root[data-pan] .fader-travel { min-inline-size: 72px; }
-.fader-pan-out {
-  flex: none; inline-size: 4.25ch; font-feature-settings: "tnum";
-  font-size: 0.8125rem; font-weight: var(--w-ui); line-height: 1.2; text-align: end; color: var(--ink);
-  user-select: none; -webkit-user-select: none;
-}
 .fader-root .fader-centre {
-  flex: none; inline-size: auto; block-size: max(24px, var(--target, 24px)); min-block-size: 0;
-  border-radius: 999px; background: transparent; color: var(--muted); opacity: 1;
+  flex: none; inline-size: auto; block-size: max(28px, var(--target, 24px)); min-block-size: 0;
+  border-radius: 999px; background: transparent; color: var(--ink); opacity: 1;
   font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1;
-  &&&& { padding: 0 8px; border: 0; }
+  &&&& { padding: 0 11px; border: 1.5px solid var(--line); }
 }
-.fader-root .fader-centre:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.fader-root .fader-centre-out {
+  flex: 1 1 0; min-inline-size: 0; block-size: max(26px, var(--target, 24px)); min-block-size: 0;
+  justify-content: flex-end; border-radius: 8px; background: transparent; color: var(--ink); opacity: 1;
+  &&&& { padding: 0 4px; border: 0; }
+}
+.fader-root :is(.fader-centre, .fader-centre-out):focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 @media (hover: hover) {
-  .fader-root .fader-centre:not([aria-disabled="true"]):hover { background: var(--well); color: var(--ink); }
+  .fader-root :is(.fader-centre, .fader-centre-out):not([aria-disabled="true"]):hover {
+    background: color-mix(in oklab, var(--ink) 8%, transparent);
+  }
 }
-@media (hover: hover) and (prefers-contrast: no-preference) {
-  .fader-root[data-pan]:not(:hover, :focus-within) .fader-centre { color: color-mix(in oklab, var(--muted) 72%, var(--card)); }
-}
-.fader-root .fader-centre[aria-disabled="true"] { color: color-mix(in oklab, var(--muted) 45%, var(--card)); cursor: default; }
+.fader-root .fader-centre[aria-disabled="true"] { color: var(--muted); cursor: default; &&&& { border-color: color-mix(in oklab, var(--line) 60%, transparent); } }
+.fader-root .fader-centre-out[aria-disabled="true"] { cursor: default; }
+.fader-root .fader-centre-out[aria-disabled="true"] .fader-pan-out { color: var(--muted); }
 @media (forced-colors: active) {
   .fader-root .fader-centre[aria-disabled="true"] { color: GrayText; }
 }
@@ -304,76 +350,78 @@ const CSS = `
 @media (forced-colors: active) {
   .fader-groove { background: Canvas; border: 1px solid CanvasText; }
   .fader-fill { background: Highlight; }
-  .fader-zero { background: CanvasText; }
+  .fader-tick { background: CanvasText; }
   .fader::-webkit-slider-thumb { background: ButtonText; border: 2px solid Canvas; }
   .fader::-moz-range-thumb { background: ButtonText; border: 2px solid Canvas; }
   .fader-track:has(> .fader:focus-visible)::after { outline-color: Highlight; }
 }
 `;
 
+interface RangeOptions<T> {
+  /** The stored value; `onChange` is called only with a different one. */
+  readonly value: T;
+  readonly onChange: (next: T, merge: boolean) => void;
+  /** The range's `min` and `max`. */
+  readonly min: number;
+  readonly max: number;
+  /** The range's integer step for a value, and back. */
+  readonly toStep: (value: T) => number;
+  readonly fromStep: (step: number) => T;
+  /** Where a double-click on the thumb puts it. */
+  readonly snap: T;
+  /** The value assistive tech means when it moves the range to `step` without a pointer. */
+  readonly assisted: (step: number) => T;
+}
+
 /**
- * A horizontal level fader: off at the far left, the 0 marker, the most an
- * ME-1 saves (+9.6 dB) at the right, on a law that gives -40 dB and up most
- * of the travel. Its fill is the
- * colour of the key it sits in (`--k`), or ink outside one. It is a native
- * range input over integer steps of the travel: drag or click the track, use
- * the arrow keys (0.5 dB, 3 dB with Shift or Page Up/Down; Home is off, End
- * the top, 0 the marker), or type into the readout, whose value is selected when
- * it takes focus. `onChange` fires only when the user changes the level, so
- * focusing or tabbing through never rounds a stored value. A drag commits
- * once, on release.
+ * The pointer and change handling a slider's native range shares: a press on
+ * the thumb has to travel a few pixels before it moves anything, so a click
+ * on it never nudges the value; a press on the track jumps there; a drag
+ * commits once, on release; a double-click on the thumb snaps it. The range
+ * is uncontrolled so React never echoes its value back as a change; `shown`
+ * is the value being dragged, or the stored one.
  */
-export const Fader = ({ value, onChange, label, compact = false }: FaderProps) => {
-  const level: Level = value ?? 0;
-  const thumb = compact ? THUMB.compact : THUMB.full;
+const useRange = <T,>(o: RangeOptions<T>) => {
   const input = useRef<HTMLInputElement>(null);
-  /** The pointer press in progress; `armed` once it has really moved the fader. */
+  /** The pointer press in progress; `armed` once it has really moved the slider. */
   const press = useRef<{ startX: number; armed: boolean } | null>(null);
   const lastThumbDown = useRef(0);
-  const [dragLevel, setDragLevel] = useState<Level | null>(null);
-  const dragged = useRef<Level | null>(null);
-  const shown = dragLevel ?? level;
+  const [drag, setDragState] = useState<{ value: T } | null>(null);
+  const dragged = useRef<{ value: T } | null>(null);
+  const opts = useRef(o);
+  opts.current = o;
 
-  const [text, setText] = useState(format(level));
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (!editing) setText(format(shown));
-  }, [shown, editing]);
-
-  // The range is uncontrolled so React never echoes its value back as a change;
-  // keep it on the shown level.
   const sync = () => {
-    if (input.current) input.current.value = String(stepOf(dragged.current ?? level));
+    const { toStep, value } = opts.current;
+    if (input.current) input.current.value = String(toStep(dragged.current?.value ?? value));
   };
   useLayoutEffect(sync);
 
-  const change = (next: Level, merge: boolean) => {
-    if (next !== level) onChange(next, { merge });
+  const change = (next: T, merge: boolean) => {
+    if (next !== opts.current.value) opts.current.onChange(next, merge);
   };
-
-  const setDrag = (next: Level | null) => {
+  const setDrag = (next: { value: T } | null) => {
     dragged.current = next;
-    setDragLevel(next);
+    setDragState(next);
   };
 
   const onPointerDown = (e: PointerEvent<HTMLInputElement>) => {
     if (e.button !== 0) return;
+    const { min, max, toStep, value, snap } = opts.current;
     const el = e.currentTarget;
     const rect = el.getBoundingClientRect();
-    const thumbX = rect.left + thumb / 2 + (stepOf(level) / STEPS) * (rect.width - thumb);
-    const onThumb = Math.abs(e.clientX - thumbX) <= thumb / 2 + 2;
+    const thumbX =
+      rect.left + THUMB / 2 + ((toStep(value) - min) / (max - min)) * (rect.width - THUMB);
+    const onThumb = Math.abs(e.clientX - thumbX) <= THUMB / 2 + 2;
     if (onThumb && e.timeStamp - lastThumbDown.current < 400) {
-      // A double-click on the thumb snaps to 0.
       lastThumbDown.current = 0;
       e.preventDefault();
       el.focus();
       press.current = null;
-      change(0, false);
+      change(snap, false);
       return;
     }
     lastThumbDown.current = onThumb ? e.timeStamp : 0;
-    // A press on the thumb has to travel a few pixels before it moves anything,
-    // so a click on it never nudges the level; a press on the track jumps there.
     press.current = { startX: e.clientX, armed: !onThumb };
   };
 
@@ -395,22 +443,21 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
     const el = input.current;
     if (!el || !press.current) return; // Not a pointer: wait for the change event.
     if (!press.current.armed) sync();
-    else setDrag(fromPosition(el.valueAsNumber / STEPS));
+    else setDrag({ value: opts.current.fromStep(el.valueAsNumber) });
   };
 
   // The native change event (React's onChange is the input event): a drag
   // commits once here, on release. Without a pointer it's assistive tech
-  // stepping the range, which moves the level as an arrow key does.
+  // stepping the range.
   const onCommit = useRef(() => {});
   onCommit.current = () => {
     const el = input.current;
     if (!el) return;
     if (press.current) {
-      if (dragged.current !== null) change(dragged.current, false);
+      if (dragged.current !== null) change(dragged.current.value, false);
       return;
     }
-    const direction = Math.sign(el.valueAsNumber - stepOf(level));
-    if (direction !== 0) change(stepped(level, direction * 0.5), true);
+    change(opts.current.assisted(el.valueAsNumber), true);
     sync();
   };
   useEffect(() => {
@@ -419,6 +466,84 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
     el?.addEventListener('change', listener);
     return () => el?.removeEventListener('change', listener);
   }, []);
+
+  return {
+    input,
+    change,
+    shown: drag ? drag.value : o.value,
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: endPress,
+      onPointerCancel: endPress,
+      onInput,
+    },
+  };
+};
+
+const Style = () => (
+  <style href="fader" precedence="default">
+    {CSS}
+  </style>
+);
+
+const Scale = ({ marks }: { marks: readonly (readonly [at: number, label: string])[] }) => (
+  <div className="fader-scale" aria-hidden="true">
+    {marks.map(([at, mark]) => (
+      <span key={mark} className="fader-mark" style={{ '--fader-mark-at': at } as CSSProperties}>
+        {mark}
+      </span>
+    ))}
+  </div>
+);
+
+const Head = ({ title, aside }: { title?: ReactNode; aside?: ReactNode }) =>
+  title || aside ? (
+    <div className="fader-head">
+      {title ?? <span />}
+      {aside}
+    </div>
+  ) : null;
+
+/**
+ * A horizontal level fader: off at the far left, 0 dB at the tick, the most
+ * an ME-1 saves (+9.6 dB) at the right, on a law that gives -40 dB and up most
+ * of the travel. It is a native range input over integer steps of the travel:
+ * drag or click the track, use the arrow keys (0.5 dB, 3 dB with Shift or
+ * Page Up/Down; Home is off, End the top, 0 the tick), double-click the thumb
+ * for 0 dB, or type into the readout, whose value is selected when it takes
+ * focus. `onChange` fires only when the user changes the level, so focusing
+ * or tabbing through never rounds a stored value.
+ */
+export const Fader = ({
+  value,
+  onChange,
+  label,
+  variant = 'field',
+  title,
+  aside,
+  issuePath,
+}: FaderProps) => {
+  const level: Level = value ?? 0;
+  const { input, change, shown, handlers } = useRange<Level>({
+    value: level,
+    onChange: (next, merge) => onChange(next, { merge }),
+    min: 0,
+    max: STEPS,
+    toStep: stepOf,
+    fromStep: (step) => fromPosition(step / STEPS),
+    snap: 0,
+    assisted: (step) => {
+      const direction = Math.sign(step - stepOf(level));
+      return direction === 0 ? level : stepped(level, direction * 0.5);
+    },
+  });
+
+  const [text, setText] = useState(format(level));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(format(shown));
+  }, [shown, editing]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
@@ -464,94 +589,81 @@ export const Fader = ({ value, onChange, label, compact = false }: FaderProps) =
   // A press that puts focus in the readout selects its value, as tabbing to it
   // does, so typing replaces the level; a press once it has focus places the caret.
   const selectOnClick = useRef(false);
+  const field = variant === 'field';
 
   return (
     <div
       className="fader-root"
-      data-compact={compact ? '' : undefined}
+      data-variant={variant}
       style={
         {
-          '--fader-at': levelPosition(shown),
-          '--fader-zero-at': levelPosition(0),
+          '--fader-from': 0,
+          '--fader-to': levelPosition(shown),
+          '--fader-tick-at': levelPosition(0),
         } as CSSProperties
       }
     >
-      <style href="fader" precedence="default">
-        {CSS}
-      </style>
-      <div className="fader-travel">
-        <div className="fader-track">
-          <span className="fader-groove" />
-          <span className="fader-fill" />
-          {compact ? null : <span className="fader-zero" />}
-          <input
-            ref={input}
-            type="range"
-            className="fader"
-            min={0}
-            max={STEPS}
-            step={1}
-            defaultValue={stepOf(level)}
-            aria-label={label}
-            aria-valuetext={shown === 'off' ? 'Off' : `${format(shown)} dB`}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endPress}
-            onPointerCancel={endPress}
-            onInput={onInput}
-            onKeyDown={onKeyDown}
-          />
-        </div>
-        {compact ? null : (
-          <div className="fader-scale" aria-hidden="true">
-            {TICKS.map(([db, tick]) => (
-              <span
-                key={tick}
-                className="fader-mark"
-                style={{ '--fader-mark-at': levelPosition(db) } as CSSProperties}
-              >
-                {tick}
-              </span>
-            ))}
+      <Style />
+      {field && <Head title={title} aside={aside} />}
+      <div className="fader-line" data-issue-path={issuePath}>
+        <div className="fader-travel">
+          <div className="fader-track">
+            <span className="fader-groove" />
+            <span className="fader-fill" data-from-end="" />
+            <span className="fader-tick" />
+            <input
+              ref={input}
+              type="range"
+              className="fader"
+              min={0}
+              max={STEPS}
+              step={1}
+              defaultValue={stepOf(level)}
+              aria-label={label}
+              aria-valuetext={shown === 'off' ? 'Off' : `${format(shown)} dB`}
+              onKeyDown={onKeyDown}
+              {...handlers}
+            />
           </div>
-        )}
-      </div>
-      <div className="fader-out">
-        <Input
-          className="fader-readout target"
-          autoComplete="off"
-          enterKeyHint="done"
-          aria-label={`${label} in dB`}
-          value={text}
-          onFocus={() => setEditing(true)}
-          onPointerDown={(e) => {
-            selectOnClick.current = document.activeElement !== e.currentTarget;
-          }}
-          onClick={(e) => {
-            if (!selectOnClick.current) return;
-            selectOnClick.current = false;
-            const el = e.currentTarget as unknown as HTMLInputElement;
-            // Unless the press dragged out a selection of its own.
-            if (el.selectionStart === el.selectionEnd) el.select();
-          }}
-          onChangeText={(t) => {
-            setEditing(true);
-            setText(t);
-          }}
-          onBlur={commitText}
-          onSubmitEditing={commitText}
-          onKeyPress={(e) => {
-            if (e.nativeEvent.key === 'Escape') {
-              setText(format(level));
-              setEditing(false);
-            }
-          }}
-        />
-        {compact ? null : (
-          <span className="fader-unit" aria-hidden="true">
-            dB
-          </span>
-        )}
+          {field && <Scale marks={LEVEL_MARKS} />}
+        </div>
+        <div className="fader-out">
+          <Input
+            className="fader-readout"
+            autoComplete="off"
+            enterKeyHint="done"
+            aria-label={`${label} in dB`}
+            value={text}
+            onFocus={() => setEditing(true)}
+            onPointerDown={(e) => {
+              selectOnClick.current = document.activeElement !== e.currentTarget;
+            }}
+            onClick={(e) => {
+              if (!selectOnClick.current) return;
+              selectOnClick.current = false;
+              const el = e.currentTarget as unknown as HTMLInputElement;
+              // Unless the press dragged out a selection of its own.
+              if (el.selectionStart === el.selectionEnd) el.select();
+            }}
+            onChangeText={(t) => {
+              setEditing(true);
+              setText(t);
+            }}
+            onBlur={commitText}
+            onSubmitEditing={commitText}
+            onKeyPress={(e) => {
+              if (e.nativeEvent.key === 'Escape') {
+                setText(format(level));
+                setEditing(false);
+              }
+            }}
+          />
+          {field && (
+            <span className="fader-unit" aria-hidden="true">
+              dB
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -564,103 +676,51 @@ export interface PanProps {
   readonly onChange: (pan: number, how: { readonly merge: boolean }) => void;
   /** Accessible name, e.g. "Key 3 pan" or "Key 3 balance". */
   readonly label: string;
+  readonly variant?: SliderVariant;
+  /** The field's label, at the start of the head row (`field` only). */
+  readonly title?: ReactNode;
+  /** The core's issue path for the pan, set on the track and its value. */
+  readonly issuePath?: string;
 }
 
 /**
- * A pan (or balance) control: a native range over the ME-1's own steps, hard
- * left at PAN_MIN, centre at PAN_CENTRE, hard right at PAN_MAX, drawn like the
- * compact level fader with its fill from the centre to the thumb. The readout
- * counts steps from the centre (`L 12`, `C`, `R 30`; see `panText`). The
- * arrow keys move a step and Page Up/Down, Home and End do as a range does;
- * a double-click on the thumb, `C` or `0` on the keyboard, or the Centre
- * button centres it. As with the fader, a press on the thumb has to travel
- * before it moves anything, a drag commits once on release, and `onChange`
- * fires only when the user changes the pan.
+ * A button that stays focusable with nothing to do, so pressing it doesn't
+ * drop focus. Tamagui's Button writes aria-disabled from its own `disabled`,
+ * which would take it out of reach; the attribute is set on the element.
  */
-export const Pan = ({ value, onChange, label }: PanProps) => {
+const useAriaDisabled = (off: boolean) => {
+  const ref = useRef<TamaguiElement>(null);
+  useEffect(() => {
+    (ref.current as unknown as HTMLElement | null)?.setAttribute('aria-disabled', String(off));
+  }, [off]);
+  return ref;
+};
+
+/**
+ * A pan (or balance) control, the same slider as the level fader: a native
+ * range over the ME-1's own steps, hard left at PAN_MIN, centre at the tick,
+ * hard right at PAN_MAX, its fill from the centre out to the thumb. Its value
+ * counts steps from the centre (`L 12`, `C`, `R 30`; see `panText`). The
+ * arrow keys move a step and Page Up/Down, Home and End do as a range does; a
+ * double-click on the thumb, `C` or `0` on the keyboard, or Centre centres
+ * it. In a field Centre is a pill in the head; in a member's line the value
+ * is the button.
+ */
+export const Pan = ({ value, onChange, label, variant = 'field', title, issuePath }: PanProps) => {
   const pan = value ?? PAN_CENTRE;
-  const thumb = THUMB.compact;
-  const input = useRef<HTMLInputElement>(null);
-  const press = useRef<{ startX: number; armed: boolean } | null>(null);
-  const lastThumbDown = useRef(0);
-  const [dragPan, setDragPan] = useState<number | null>(null);
-  const dragged = useRef<number | null>(null);
-  const shown = dragPan ?? pan;
+  const { input, change, shown, handlers } = useRange<number>({
+    value: pan,
+    onChange: (next, merge) => onChange(next, { merge }),
+    min: PAN_MIN,
+    max: PAN_MAX,
+    toStep: (p) => p,
+    fromStep: (step) => step,
+    snap: PAN_CENTRE,
+    assisted: (step) => step,
+  });
   const span = PAN_MAX - PAN_MIN;
   const at = (shown - PAN_MIN) / span;
   const mid = (PAN_CENTRE - PAN_MIN) / span;
-
-  const sync = () => {
-    if (input.current) input.current.value = String(dragged.current ?? pan);
-  };
-  useLayoutEffect(sync);
-
-  const change = (next: number, merge: boolean) => {
-    if (next !== pan) onChange(next, { merge });
-  };
-  const setDrag = (next: number | null) => {
-    dragged.current = next;
-    setDragPan(next);
-  };
-
-  const onPointerDown = (e: PointerEvent<HTMLInputElement>) => {
-    if (e.button !== 0) return;
-    const el = e.currentTarget;
-    const rect = el.getBoundingClientRect();
-    const thumbX = rect.left + thumb / 2 + ((pan - PAN_MIN) / span) * (rect.width - thumb);
-    const onThumb = Math.abs(e.clientX - thumbX) <= thumb / 2 + 2;
-    if (onThumb && e.timeStamp - lastThumbDown.current < 400) {
-      // A double-click (or double tap) on the thumb centres it.
-      lastThumbDown.current = 0;
-      e.preventDefault();
-      el.focus();
-      press.current = null;
-      change(PAN_CENTRE, false);
-      return;
-    }
-    lastThumbDown.current = onThumb ? e.timeStamp : 0;
-    press.current = { startX: e.clientX, armed: !onThumb };
-  };
-
-  const onPointerMove = (e: PointerEvent<HTMLInputElement>) => {
-    const p = press.current;
-    if (p && !p.armed && Math.abs(e.clientX - p.startX) >= 3) p.armed = true;
-  };
-
-  const endPress = () => {
-    window.setTimeout(() => {
-      press.current = null;
-      setDrag(null);
-      sync();
-    });
-  };
-
-  const onInput = () => {
-    const el = input.current;
-    if (!el || !press.current) return;
-    if (!press.current.armed) sync();
-    else setDrag(el.valueAsNumber);
-  };
-
-  // The native change event: a drag commits here, once; without a pointer it's
-  // the keyboard or assistive tech stepping the range.
-  const onCommit = useRef(() => {});
-  onCommit.current = () => {
-    const el = input.current;
-    if (!el) return;
-    if (press.current) {
-      if (dragged.current !== null) change(dragged.current, false);
-      return;
-    }
-    change(el.valueAsNumber, true);
-    sync();
-  };
-  useEffect(() => {
-    const el = input.current;
-    const listener = () => onCommit.current();
-    el?.addEventListener('change', listener);
-    return () => el?.removeEventListener('change', listener);
-  }, []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
@@ -671,69 +731,87 @@ export const Pan = ({ value, onChange, label }: PanProps) => {
   };
 
   const centred = pan === PAN_CENTRE;
-  const centre = useRef<TamaguiElement>(null);
-  // It stays focusable with nothing to do, so pressing it doesn't drop focus.
-  useEffect(() => {
-    (centre.current as unknown as HTMLElement | null)?.setAttribute(
-      'aria-disabled',
-      String(centred),
-    );
-  }, [centred]);
+  const centre = useAriaDisabled(centred);
+  const field = variant === 'field';
+  const name = `Centre ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+  const onCentre = () => {
+    if (!centred) change(PAN_CENTRE, false);
+  };
+  const readout = (
+    <span className="fader-pan-out" aria-hidden={field ? 'true' : undefined}>
+      {panText(shown)}
+    </span>
+  );
 
   return (
     <div
       className="fader-root"
-      data-compact=""
+      data-variant={variant}
       data-pan=""
       style={
         {
           '--fader-from': Math.min(at, mid),
           '--fader-to': Math.max(at, mid),
-          '--fader-zero-at': mid,
+          '--fader-tick-at': mid,
         } as CSSProperties
       }
     >
-      <style href="fader" precedence="default">
-        {CSS}
-      </style>
-      <div className="fader-travel">
-        <div className="fader-track">
-          <span className="fader-groove" />
-          <span className="fader-fill" data-pan="" />
-          <span className="fader-zero" />
-          <input
-            ref={input}
-            type="range"
-            className="fader"
-            min={PAN_MIN}
-            max={PAN_MAX}
-            step={1}
-            defaultValue={pan}
-            aria-label={label}
-            aria-valuetext={panSpoken(shown)}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endPress}
-            onPointerCancel={endPress}
-            onInput={onInput}
-            onKeyDown={onKeyDown}
-          />
+      <Style />
+      {field && (
+        <Head
+          title={title}
+          aside={
+            <Action
+              ref={centre}
+              className="fader-centre target"
+              kind="ghost"
+              aria-label={name}
+              onPress={onCentre}
+            >
+              <span>Centre</span>
+            </Action>
+          }
+        />
+      )}
+      <div className="fader-line" data-issue-path={issuePath}>
+        <div className="fader-travel">
+          <div className="fader-track">
+            <span className="fader-groove" />
+            <span className="fader-fill" />
+            <span className="fader-tick" />
+            <input
+              ref={input}
+              type="range"
+              className="fader"
+              min={PAN_MIN}
+              max={PAN_MAX}
+              step={1}
+              defaultValue={pan}
+              aria-label={label}
+              aria-valuetext={panSpoken(shown)}
+              onKeyDown={onKeyDown}
+              {...handlers}
+            />
+          </div>
+          {field && <Scale marks={PAN_MARKS} />}
+        </div>
+        <div className="fader-out">
+          {field ? (
+            readout
+          ) : (
+            // The name keeps the value it shows, so a voice user can say what they see.
+            <Action
+              ref={centre}
+              className="fader-centre-out"
+              kind="ghost"
+              aria-label={`${name}, now ${panText(pan)}`}
+              onPress={onCentre}
+            >
+              {readout}
+            </Action>
+          )}
         </div>
       </div>
-      <span className="fader-pan-out" aria-hidden="true">
-        {panText(shown)}
-      </span>
-      <Action
-        ref={centre}
-        className="fader-centre target"
-        kind="ghost"
-        aria-label={`Centre ${label.charAt(0).toLowerCase()}${label.slice(1)}`}
-        onPress={() => {
-          if (!centred) change(PAN_CENTRE, false);
-        }}
-      >
-        <span>Centre</span>
-      </Action>
     </div>
   );
 };
