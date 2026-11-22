@@ -23,10 +23,18 @@ export type Loaded =
   | { readonly ok: false; readonly issues: readonly Issue[] }
   | { readonly ok: false; readonly issues: null };
 
-const kind = (file: File): 'me1' | 'meu' | null => {
+export type FileKind = 'me1' | 'meu';
+
+/** Which of the two files this is, going by its extension; `null` for anything else. */
+export const kindOf = (file: File): FileKind | null => {
   const ext = file.name.split('.').pop()?.toLowerCase();
   return ext === 'me1' || ext === 'meu' ? ext : null;
 };
+
+/** The kinds of config file in a list, each once. */
+export const kindsOf = (files: readonly File[]): FileKind[] => [
+  ...new Set(files.flatMap((file) => kindOf(file) ?? [])),
+];
 
 /**
  * Read dropped or picked files on top of what's already loaded, so an `.ME1`
@@ -40,7 +48,7 @@ export const load = async (incoming: Iterable<File>, current: LoadedFiles): Prom
   let files: LoadedFiles = current;
   let any = false;
   for (const file of list) {
-    const k = kind(file);
+    const k = kindOf(file);
     if (!k) continue;
     any = true;
     files = { ...files, [k]: { name: file.name, data: new Uint8Array(await file.arrayBuffer()) } };

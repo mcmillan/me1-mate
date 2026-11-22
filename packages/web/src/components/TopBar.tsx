@@ -1,20 +1,21 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
-import { Input, SizableText, type TamaguiElement, Theme, XStack, YStack } from 'tamagui';
+import { Input, type TamaguiElement, YStack } from 'tamagui';
 import {
   canRedoAtom,
   canUndoAtom,
   configNameAtom,
   dirtyAtom,
+  goHomeAtom,
   redoAtom,
   resetAtom,
   undoAtom,
 } from '../lib/store.ts';
-import { ACCENT, DISPLAY_FONT } from '../lib/theme.ts';
-import { ConfirmDialog } from './ConfirmDialog.tsx';
+import { keyColor, keyStyle } from '../lib/theme.ts';
 import { ExportMenu } from './ExportMenu.tsx';
 import { chooseFiles } from './OpenFiles.tsx';
 import { ProblemsButton } from './ProblemsButton.tsx';
+import { startTourAtom } from './Tour.tsx';
 import { Action } from './ui.tsx';
 
 const NATIVE_FOCUSGROUP = 'focusGroup' in HTMLElement.prototype;
@@ -24,18 +25,24 @@ const NATIVE_HINTS =
   'interestForElement' in HTMLButtonElement.prototype && CSS.supports('position-area', 'block-end');
 
 /**
- * The bar lays itself out by its own width. From 720px it is one row, 56px
- * tall (`--topbar` in styles.css); below that the toolbar takes a second row,
- * with Export at the far end. `.top-quiet` keeps words for screen readers
- * where the bar is too narrow to show them: on a phone, and while one row is
- * a tight fit (the status's words, in ProblemsButton, come back at 800px and
- * "Unsaved changes" at 900px). At 360px and under, "Ready to export" is only
- * spoken (`.top-ready`) and the toolbar closes up, so its row doesn't wrap.
+ * The bar sits on the canvas, with a hairline under it only once the page has
+ * scrolled beneath it. It lays itself out by its own width. From 720px it is
+ * one row, 60px tall (`--topbar` in styles.css); below that the toolbar takes
+ * a second row, with Export at the far end. `.top-quiet` keeps words for
+ * screen readers where the bar is too narrow to show them: on a phone, and
+ * while one row is a tight fit (the status's words, in ProblemsButton, come
+ * back at 860px and "Unsaved changes" at 1000px). Under 480px the toolbar
+ * closes up; at 360px and under, "Ready to export" is only spoken
+ * (`.top-ready`) and Export drops its arrow, so its row doesn't wrap.
  *
  * Only while it is two rows, the bar slides away as the page scrolls down and
  * comes back on the way up, or whenever focus is inside it: a scroll-state
  * query (on `html`, styles.css) where there is one, the `top-away` class (set
- * from script) elsewhere.
+ * from script, with `top-scrolled` for the hairline) elsewhere.
+ *
+ * The unsaved dot wears a key's colour inside an ink ring: on a narrow bar it
+ * stands alone for the words, and no key colour is dark enough against the
+ * canvas to do that unaided.
  *
  * In forced colours author backgrounds go: the unsaved dot and the primary
  * button are given system colours there. The button opts out of forcing (the
@@ -43,59 +50,101 @@ const NATIVE_HINTS =
  * and text set as the system's highlight pair.
  */
 const CSS_TEXT = `
-.top-bar { container: topbar / inline-size; background: var(--panel); border-block-end: 1px solid var(--panel-border); }
-.top-row { box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; inline-size: 100%; max-inline-size: 1480px; min-block-size: 55px; margin-inline: auto; padding: 8px 12px; }
+.top-bar { container: topbar / inline-size; background: var(--canvas); }
+.top-bar::after { content: ""; position: absolute; inset: auto 0 0; border-block-end: 1.5px solid var(--line); opacity: 0; pointer-events: none; }
+@container scroll-state(scrollable: top) {
+  .top-bar::after { opacity: 1; }
+}
+.top-bar.top-scrolled::after { opacity: 1; }
+.top-row { box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; inline-size: 100%; max-inline-size: 1480px; min-block-size: var(--topbar); margin-inline: auto; padding: 6px 12px; }
 .top-id { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
-.top-tools { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; row-gap: 8px; min-inline-size: 0; }
-.top-group { display: flex; align-items: center; gap: 4px; }
-.top-sep { flex: none; align-self: stretch; inline-size: 12px; block-size: auto; margin: 0; border: 0; border-inline-start: 1px solid transparent; }
-.top-sep-wide { flex: 1 1 12px; }
+.top-brand { flex: none; box-sizing: border-box; display: flex; align-items: center; min-block-size: max(38px, var(--target)); margin: 0 -8px; padding: 0 8px; border: 0; border-radius: 12px; background: transparent; color: inherit; cursor: pointer; font-size: 1.625rem; font-weight: var(--w-black); line-height: 1; white-space: nowrap; }
+.top-brand > span { display: block; }
+.top-tools { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; row-gap: 6px; min-inline-size: 0; }
+.top-group { display: flex; align-items: center; gap: 2px; }
+.top-group:last-child { gap: 8px; }
+.top-help { display: flex; }
+.top-sep { flex: none; align-self: stretch; inline-size: 10px; block-size: auto; margin: 0; border: 0; border-inline-start: 1px solid transparent; }
+.top-sep-wide { flex: 1 1 10px; }
 .top-bar button.target, .top-name { min-block-size: max(38px, var(--target)); }
-.top-name { cursor: text; background: var(--well); border-color: var(--panel-border); }
+.top-bar .top-file > span { font-weight: var(--w-ui); }
+.top-bar button.top-icon { min-inline-size: max(38px, var(--target)); }
+.top-glyph { font-size: 1.25rem; font-weight: var(--w-ui); line-height: 1; }
+.top-ask { box-sizing: border-box; display: grid; place-items: center; inline-size: 22px; block-size: 22px; border: 1.5px solid currentColor; border-radius: 50%; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-strong); line-height: 1; }
+
+.top-name { flex: 0 1 auto; min-inline-size: 0; box-sizing: border-box; display: flex; align-items: center; padding-inline: 4px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); cursor: text; font-size: 1.0625rem; }
+.top-ext { color: var(--muted); font-weight: var(--w-text); user-select: none; }
 @media (hover: hover) {
-  .top-name:hover { border-color: color-mix(in oklab, var(--panel-border) 55%, currentColor); }
+  .top-name:hover { border-color: color-mix(in oklab, var(--line) 50%, var(--muted)); }
+  .top-brand:hover { background: var(--well); }
+  .top-bar button:hover .top-ask { color: var(--ink); }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .top-name { transition: border-color 120ms ease-out; }
-}
-.top-bar button:focus-visible { outline-color: var(--focus); }
-.top-name:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
-.top-name input { inline-size: calc(8ch + 10px); }
+.top-bar button:focus-visible .top-ask { color: var(--ink); }
+.top-name:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.top-name input { inline-size: 11ch; }
+.top-bar .top-name input { font-weight: var(--w-ui); }
 @supports (field-sizing: content) {
-  .top-name input { field-sizing: content; inline-size: auto; min-inline-size: calc(4ch + 10px); max-inline-size: calc(8ch + 10px); }
+  .top-name input { field-sizing: content; inline-size: auto; min-inline-size: 4ch; }
 }
 .top-name input:focus-visible { outline: none; }
-.top-tip { inset: auto; margin: 6px 0; padding: 3px 8px; border: 1px solid transparent; border-radius: 6px; background: CanvasText; color: Canvas; white-space: nowrap; position-area: block-end; position-try-fallbacks: flip-block; }
+
+.top-unsaved { flex: none; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-ui); white-space: nowrap; }
+.top-dot { flex: none; box-sizing: border-box; inline-size: 12px; block-size: 12px; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--k); }
+.top-bar .top-label { font-weight: var(--w-strong); }
+.top-arrow { display: inline-block; font-weight: var(--w-strong); }
+
+.top-tip { inset: auto; margin: 6px 0; padding: 4px 10px; border: 1px solid transparent; border-radius: 999px; background: var(--ink); color: var(--canvas); font-size: 0.75rem; font-weight: var(--w-ui); white-space: nowrap; position-area: block-end; position-try-fallbacks: flip-block; }
 .top-tip:not(:popover-open) { display: none; }
 .top-said { position: absolute; inline-size: 1px; block-size: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .top-bar [interestfor] { interest-delay: 0.4s 0.1s; }
 .top-bar:has(:interest-source) [interestfor] { interest-delay-start: 0s; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .top-bar::after { transition: opacity 200ms ease-out; }
+  .top-name { transition: border-color 120ms ease-out; }
+  .top-ask { transition: color 120ms ease-out; }
+  .top-bar button { transition: scale 200ms var(--spring), background-color 120ms ease-out, border-color 120ms ease-out; }
+  .top-bar button:not([aria-disabled="true"]):active { scale: 0.96; }
+  .top-dot { animation: top-pop 300ms var(--spring) both; }
+  .top-arrow { transition: translate 200ms var(--spring); }
+  .top-export[aria-expanded="true"] .top-arrow { translate: 0 2px; }
+}
+@keyframes top-pop { from { scale: 0; } }
+
 @container topbar (inline-size < 480px) {
   .top-group { gap: 0; }
   .top-group:last-child { gap: 6px; }
   .top-sep { inline-size: 8px; }
   .top-sep-wide { flex-basis: 8px; }
+  .top-id { gap: 10px; }
+  /* Three times the class, to outweigh the buttons' own padding. */
+  .top-tools .top-group .top-file.top-file.top-file { padding-inline: 6px; }
+  .top-tools .top-group .top-problems.top-problems.top-problems { padding-inline: 10px; }
+  .top-tools .top-group .top-export.top-export.top-export { padding-inline: 14px; }
 }
-@container topbar ((inline-size < 560px) or ((inline-size >= 720px) and (inline-size < 800px))) {
+@container topbar ((inline-size < 560px) or ((inline-size >= 720px) and (inline-size < 860px))) {
   .top-quiet { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
-@container topbar ((inline-size >= 720px) and (inline-size < 900px)) {
+@container topbar ((inline-size >= 720px) and (inline-size < 860px)) {
+  .top-sep { inline-size: 6px; }
+  .top-tools .top-group .top-file.top-file.top-file { padding-inline: 8px; }
+}
+@container topbar ((inline-size >= 720px) and (inline-size < 1000px)) {
   .top-id .top-quiet { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
-@container topbar (inline-size < 390px) {
+@container topbar (inline-size <= 360px) {
   .top-sep { inline-size: 4px; }
   .top-sep-wide { flex-basis: 4px; }
-  .top-tools .top-group .top-file.top-file.top-file { padding-inline: 6px; }
-}
-@container topbar (inline-size <= 360px) {
-  .top-ready { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .top-arrow { display: none; }
+  .top-brand { font-size: 1.375rem; }
+  .top-id { gap: 8px; }
 }
 @container topbar (inline-size >= 640px) {
-  .top-row { padding-inline: 16px; }
+  .top-row { padding-inline: 20px; }
 }
 @container topbar (inline-size >= 720px) {
-  /* One row, 56px with the border, for fingers' taller buttons too. */
-  .top-row { flex-wrap: nowrap; padding-block: min(8px, (55px - max(38px, var(--target))) / 2); }
+  /* One row, exactly --topbar tall, for fingers' taller buttons too. */
+  .top-row { flex-wrap: nowrap; padding-block: 0; }
   .top-tools { flex: 0 0 auto; flex-wrap: nowrap; margin-inline-start: auto; }
   .top-sep-wide { flex: none; }
 }
@@ -118,51 +167,57 @@ const CSS_TEXT = `
 }
 `;
 
-const Brand = () => (
-  <XStack items="center" gap="2" shrink={0}>
-    <Theme name={ACCENT}>
-      <YStack w={28} h={28} rounded="md" bg="color-8" items="center" justify="center" aria-hidden>
-        <SizableText size="sm" fontWeight="800" color="background">
-          2
-        </SizableText>
-      </YStack>
-    </Theme>
-    <SizableText render="h1" m="0" size="base" fontWeight="700">
-      2me2u
-    </SizableText>
-  </XStack>
-);
+const HOME = 'Home';
+
+/**
+ * The wordmark is the way home: a button named for where it goes, its two 2s
+ * in two of the keys' colours. The page's heading is beside it, for screen
+ * readers only, so the heading isn't named "Home".
+ */
+const Brand = ({ tip }: { readonly tip: string }) => {
+  const goHome = useSetAtom(goHomeAtom);
+  return (
+    <>
+      <h1 className="top-said">2me2u</h1>
+      <button
+        type="button"
+        className="display top-brand"
+        aria-label={HOME}
+        onClick={() => goHome()}
+        {...((NATIVE_HINTS ? { interestfor: tip } : { title: HOME }) as Record<string, string>)}
+      >
+        <span aria-hidden="true">
+          <span style={{ color: keyColor(0) }}>2</span>
+          me
+          <span style={{ color: keyColor(3) }}>2</span>u
+        </span>
+      </button>
+    </>
+  );
+};
 
 /**
  * The config's name, shown as the file it is saved as: the `.ME1` suffix sits
- * in the same field, and clicking it focuses the name.
+ * in the same pill, and clicking it focuses the name.
  */
 const ConfigName = () => {
   const [configName, setConfigName] = useAtom(configNameAtom);
   return (
-    <XStack
-      render="label"
-      className="top-name"
-      items="center"
-      pr="2.5"
-      rounded="md"
-      borderWidth={1}
-      shrink={0}
-    >
+    // biome-ignore lint/a11y/noLabelWithoutControl: Tamagui's Input, inside it, is the control
+    <label className="top-name">
       <Input
         size="sm"
         maxLength={8}
         pattern="[0-9A-Z_\-]{0,8}"
         value={configName}
-        fontFamily={DISPLAY_FONT}
-        fontWeight="600"
-        h={36}
+        fontSize={17}
+        h={34}
         borderWidth={0}
         bg="transparent"
         pl="2.5"
         pr="0"
         placeholder="NAME"
-        placeholderTextColor="color-8"
+        placeholderTextColor="placeholder-color"
         onChangeText={(v) => setConfigName(v.toUpperCase().replace(/[^0-9A-Z_-]/g, ''))}
         aria-label="Config name, up to 8 characters; the ME-1 shows it as the config's name"
         autoComplete="off"
@@ -174,10 +229,10 @@ const ConfigName = () => {
         spellCheck={false}
         enterKeyHint="done"
       />
-      <SizableText size="sm" fontFamily={DISPLAY_FONT} color="color-8" select="none" aria-hidden>
+      <span className="top-ext" aria-hidden="true">
         .ME1
-      </SizableText>
-    </XStack>
+      </span>
+    </label>
   );
 };
 
@@ -185,44 +240,20 @@ const ConfigName = () => {
 const Unsaved = () => {
   const dirty = useAtomValue(dirtyAtom);
   return (
-    <XStack role="status" items="center" gap="1.5" shrink={0}>
+    <div role="status" className="top-unsaved">
       {dirty && (
         <>
-          <Theme name={ACCENT}>
-            <YStack className="top-dot" w={8} h={8} rounded="full" bg="color-8" aria-hidden />
-          </Theme>
-          <span className="top-quiet">
-            <SizableText size="xs" color="color-10">
-              Unsaved changes
-            </SizableText>
-          </span>
+          <span className="top-dot" style={keyStyle(1)} aria-hidden="true" />
+          <span className="top-quiet">Unsaved changes</span>
         </>
       )}
-    </XStack>
+    </div>
   );
 };
 
 const UNDO = 'Undo (⌘Z)';
 const REDO = 'Redo (⇧⌘Z)';
-
-const ArrowIcon = ({ flip }: { flip?: boolean }) => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    aria-hidden="true"
-    style={flip ? { transform: 'scaleX(-1)' } : undefined}
-  >
-    <path
-      d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+const TOUR = 'Show me around';
 
 /**
  * An icon-only toolbar button. It stays focusable when it can't be used
@@ -232,16 +263,20 @@ const ArrowIcon = ({ flip }: { flip?: boolean }) => (
 const IconAction = ({
   label,
   tip,
-  enabled,
+  enabled = true,
   onPress,
-  flip,
+  glyph,
+  className = 'top-glyph',
 }: {
   readonly label: string;
   /** The id of this button's `Tip`. */
   readonly tip: string;
-  readonly enabled: boolean;
+  readonly enabled?: boolean;
   readonly onPress: () => void;
-  readonly flip?: boolean;
+  /** One of Allo's arrows, or a character. */
+  readonly glyph: string;
+  /** The glyph's class. */
+  readonly className?: string;
 }) => {
   const ref = useRef<TamaguiElement>(null);
   // Tamagui's Button writes aria-disabled from its own `disabled`, which would
@@ -253,14 +288,16 @@ const IconAction = ({
     <Action
       ref={ref}
       kind="ghost"
-      className="target"
-      px="2"
+      className="target top-icon"
+      px="0"
       aria-label={label}
       onPress={() => enabled && onPress()}
       {...(enabled ? {} : { opacity: 0.4, cursor: 'not-allowed', bg: 'transparent' })}
       {...((NATIVE_HINTS ? { interestfor: tip } : { title: label }) as Record<string, string>)}
     >
-      <ArrowIcon {...(flip ? { flip } : {})} />
+      <span className={className} aria-hidden="true">
+        {glyph}
+      </span>
     </Action>
   );
 };
@@ -272,9 +309,7 @@ const IconAction = ({
 const Tip = ({ id, children }: { id: string; children: string }) =>
   NATIVE_HINTS ? (
     <div id={id} className="top-tip" {...({ popover: 'hint' } as Record<string, string>)}>
-      <SizableText size="xs" fontWeight="500" style={{ color: 'inherit' }}>
-        {children}
-      </SizableText>
+      {children}
     </div>
   ) : null;
 
@@ -332,7 +367,10 @@ const useRovingFocus = (ref: RefObject<HTMLDivElement | null>) => {
   }, [ref]);
 };
 
-/** Where scroll-state queries are missing, track the scroll direction for `.top-away`. */
+/**
+ * Where scroll-state queries are missing, track whether the page has scrolled
+ * (`.top-scrolled`) and which way (`.top-away`).
+ */
 const useScrollAway = (ref: RefObject<TamaguiElement | null>) => {
   useEffect(() => {
     // On the web a Tamagui view is its DOM element.
@@ -343,6 +381,7 @@ const useScrollAway = (ref: RefObject<TamaguiElement | null>) => {
       // Clamped, so rubber-banding at either end doesn't count as a change of direction.
       const limit = document.documentElement.scrollHeight - window.innerHeight;
       const y = Math.max(0, Math.min(window.scrollY, limit));
+      bar.classList.toggle('top-scrolled', y > 0);
       if (y === lastY) return;
       bar.classList.toggle('top-away', y > lastY && y > bar.offsetHeight);
       lastY = y;
@@ -368,8 +407,7 @@ export const TopBar = () => {
   const canUndo = useAtomValue(canUndoAtom);
   const canRedo = useAtomValue(canRedoAtom);
   const reset = useSetAtom(resetAtom);
-  const dirty = useAtomValue(dirtyAtom);
-  const [confirmingNew, setConfirmingNew] = useState(false);
+  const startTour = useSetAtom(startTourAtom);
   // What Undo or Redo just did, for screen readers: nothing else says it. The
   // count makes a repeat a new message, so it is announced again.
   const [said, setSaid] = useState({ text: '', count: 0 });
@@ -385,7 +423,7 @@ export const TopBar = () => {
       <style>{CSS_TEXT}</style>
       <div className="top-row">
         <div className="top-id">
-          <Brand />
+          <Brand tip={`${id}-home`} />
           <ConfigName />
           <Unsaved />
         </div>
@@ -406,6 +444,7 @@ export const TopBar = () => {
                 undo();
                 say('Undone');
               }}
+              glyph="↺"
             />
             <IconAction
               label={REDO}
@@ -415,24 +454,30 @@ export const TopBar = () => {
                 redo();
                 say('Redone');
               }}
-              flip
+              glyph="↻"
             />
           </div>
           <Separator />
           {/* biome-ignore lint/a11y/useSemanticElements: a toolbar group, not a form's fieldset */}
           <div role="group" aria-label="Files" className="top-group">
-            <Action kind="ghost" className="target top-file" px="2.5" onPress={chooseFiles}>
+            <Action kind="ghost" className="target top-file" px="3" onPress={chooseFiles}>
               Open
             </Action>
-            <Action
-              kind="ghost"
-              className="target top-file"
-              px="2.5"
-              onPress={() => (dirty ? setConfirmingNew(true) : reset())}
-            >
+            {/* Nothing to confirm: the system that was open stays in the list of sessions. */}
+            <Action kind="ghost" className="target top-file" px="3" onPress={() => reset()}>
               New
             </Action>
           </div>
+          <Separator />
+          <span className="top-help">
+            <IconAction
+              label={TOUR}
+              tip={`${id}-tour`}
+              onPress={() => startTour()}
+              glyph="?"
+              className="top-ask"
+            />
+          </span>
           <Separator wide />
           {/* biome-ignore lint/a11y/useSemanticElements: a toolbar group, not a form's fieldset */}
           <div role="group" aria-label="Export" className="top-group">
@@ -446,20 +491,10 @@ export const TopBar = () => {
         {said.text}
         {said.count % 2 === 1 ? '\u00a0' : ''}
       </p>
+      <Tip id={`${id}-home`}>{HOME}</Tip>
       <Tip id={`${id}-undo`}>{UNDO}</Tip>
       <Tip id={`${id}-redo`}>{REDO}</Tip>
-      {/* Outside the toolbar, so its buttons aren't taken for toolbar items. */}
-      <ConfirmDialog
-        open={confirmingNew}
-        title="Start a new system?"
-        confirmLabel="Discard changes"
-        onClose={(confirmed) => {
-          setConfirmingNew(false);
-          if (confirmed) reset();
-        }}
-      >
-        Your unsaved changes will be lost.
-      </ConfirmDialog>
+      <Tip id={`${id}-tour`}>{TOUR}</Tip>
     </YStack>
   );
 };

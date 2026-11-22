@@ -1,15 +1,15 @@
 /**
- * Autosave: the editor's work survives a reload or a closed tab, and comes
- * back when the page is opened again. What's saved is the original file bytes
- * plus the edited channels and keys; on restore the files are parsed again to
- * recover `source`, so a re-export stays byte-exact. Everything stays in this
- * browser's localStorage.
+ * Sessions: the editor's work is saved as you go, and every system you've
+ * worked on is kept in a list to come back to. What's saved is the original
+ * file bytes plus the edited channels and keys; on opening, the files are
+ * parsed again to recover `source`, so a re-export stays byte-exact.
+ * Everything stays in this browser's localStorage.
  */
 
 import type { Channel, Key } from '@mcmillan/2me2u-core';
-import { atom, useAtomValue, useSetAtom, useStore } from 'jotai';
+import { atom, type Setter, useAtomValue, useStore } from 'jotai';
 import { useEffect, useRef } from 'react';
-import { blank, type Editable, fromSystem } from './edit.ts';
+import { blank, type Editable, fromSystem, isBlank, keyLabel } from './edit.ts';
 import { type LoadedFile, type LoadedFiles, load } from './files.ts';
 import {
   configNameAtom,
@@ -17,12 +17,20 @@ import {
   editAtom,
   filesAtom,
   replaceSystemAtom,
+  screenAtom,
+  sessionIdAtom,
   startedAtom,
   systemAtom,
   toastAtom,
 } from './store.ts';
 
-const KEY = '2me2u:session:v1';
+/** The list of sessions, newest first: enough to show them without reading each one. */
+const INDEX_KEY = '2me2u:sessions:v2';
+const bodyKey = (id: string): string => `2me2u:session:v2:${id}`;
+/** The single session earlier versions kept; it's moved into the list when found. */
+const LEGACY_KEY = '2me2u:session:v1';
+/** Older sessions beyond this many are dropped, oldest first. */
+const MAX_SESSIONS = 12;
 const DEBOUNCE_MS = 500;
 
 interface SavedFile {
@@ -31,16 +39,29 @@ interface SavedFile {
   readonly data: string;
 }
 
-/** A saved session, as stored. */
+/** A session as listed: what it's called, when it was last worked on, and a sketch of its keys. */
+export interface SessionSummary {
+  readonly id: string;
+  /** When it was last saved, ms since the epoch. */
+  readonly savedAt: number;
+  readonly configName: string;
+  /** The names of the files it was loaded from, if any. */
+  readonly files: { readonly me1?: string; readonly meu?: string };
+  /** Whether it has edits that haven't been exported. */
+  readonly dirty: boolean;
+  /** Each key's type and label, to draw a small picture of the system. */
+  readonly keys: readonly { readonly type: Key['type']; readonly label: string }[];
+}
+
+/** A whole saved session, as stored. */
 interface Session {
-  readonly version: 1;
-  /** When it was saved, ms since the epoch. */
+  readonly version: 2;
+  readonly id: string;
   readonly savedAt: number;
   readonly configName: string;
   readonly files: { readonly me1?: SavedFile; readonly meu?: SavedFile };
   readonly channels: readonly Channel[];
   readonly keys: readonly Key[];
-  /** Whether there were unsaved edits. */
   readonly dirty: boolean;
 }
 
@@ -74,45 +95,48 @@ const saveFile = (file: LoadedFile): SavedFile => {
 
 // ---- storage ---------------------------------------------------------------
 
-const isSession = (value: unknown): value is Session => {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Partial<Session>;
-  return (
-    v.version === 1 &&
-    typeof v.savedAt === 'number' &&
-    typeof v.configName === 'string' &&
-    typeof v.files === 'object' &&
-    v.files !== null &&
-    Array.isArray(v.channels) &&
-    Array.isArray(v.keys)
-  );
-};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
-/** The saved session, if there is a readable one. */
-const readSession = (): Session | null => {
+const isSession = (value: unknown): value is Session =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.savedAt === 'number' &&
+  typeof value.configName === 'string' &&
+  isRecord(value.files) &&
+  Array.isArray(value.channels) &&
+  Array.isArray(value.keys);
+
+const isSummary = (value: unknown): value is SessionSummary =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.savedAt === 'number' &&
+  typeof value.configName === 'string' &&
+  isRecord(value.files) &&
+  Array.isArray(value.keys);
+
+const readJSON = (key: string): unknown => {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const value: unknown = JSON.parse(raw);
-    return isSession(value) ? value : null;
+    const raw = localStorage.getItem(key);
+    return raw === null ? null : (JSON.parse(raw) as unknown);
   } catch {
     return null;
   }
 };
 
-const discardSession = (): void => {
+const remove = (key: string): void => {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem(key);
   } catch {
-    // Storage unavailable: nothing to discard.
+    // Storage unavailable: nothing to remove.
   }
 };
 
 type WriteResult = 'ok' | 'full' | 'unavailable';
 
-const writeSession = (session: Session): WriteResult => {
+const write = (key: string, value: unknown): WriteResult => {
   try {
-    localStorage.setItem(KEY, JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify(value));
     return 'ok';
   } catch (error) {
     return error instanceof DOMException &&
@@ -122,12 +146,90 @@ const writeSession = (session: Session): WriteResult => {
   }
 };
 
-// ---- restoring -------------------------------------------------------------
-
-const toLoaded = (saved: SavedFile): File => {
-  const bytes = fromBase64(saved.data);
-  return new File([bytes as BlobPart], saved.name);
+const summarise = (session: Session): SessionSummary => {
+  const system: Editable = { channels: session.channels, keys: session.keys };
+  return {
+    id: session.id,
+    savedAt: session.savedAt,
+    configName: session.configName,
+    files: {
+      ...(session.files.me1 ? { me1: session.files.me1.name } : {}),
+      ...(session.files.meu ? { meu: session.files.meu.name } : {}),
+    },
+    dirty: session.dirty,
+    keys: session.keys.map((key) => ({ type: key.type, label: keyLabel(system, key) })),
+  };
 };
+
+const newestFirst = (list: readonly SessionSummary[]): SessionSummary[] =>
+  [...list].sort((a, b) => b.savedAt - a.savedAt);
+
+/** The session the previous version kept, moved into the list; `null` if there isn't one. */
+const adoptLegacy = (): SessionSummary | null => {
+  const old = readJSON(LEGACY_KEY);
+  if (!isRecord(old) || !Array.isArray(old.keys) || !Array.isArray(old.channels)) return null;
+  const session = { ...old, version: 2, id: crypto.randomUUID() };
+  if (!isSession(session)) return null;
+  if (write(bodyKey(session.id), session) !== 'ok') return null;
+  remove(LEGACY_KEY);
+  return summarise(session);
+};
+
+/** The saved sessions, newest first. */
+const readIndex = (): SessionSummary[] => {
+  const stored = readJSON(INDEX_KEY);
+  const list = Array.isArray(stored) ? stored.filter(isSummary) : [];
+  const adopted = adoptLegacy();
+  if (!adopted) return newestFirst(list);
+  const next = newestFirst([adopted, ...list]);
+  write(INDEX_KEY, next);
+  return next;
+};
+
+/**
+ * Save a session and list it, dropping the oldest sessions beyond the limit,
+ * and more of them if the browser's storage is full. Returns the new list, or
+ * why it couldn't be saved.
+ */
+const storeSession = (
+  session: Session,
+  current: readonly SessionSummary[],
+): { readonly list: SessionSummary[] } | { readonly failed: Exclude<WriteResult, 'ok'> } => {
+  let others = newestFirst(current.filter((s) => s.id !== session.id));
+  for (const dropped of others.slice(MAX_SESSIONS - 1)) remove(bodyKey(dropped.id));
+  others = others.slice(0, MAX_SESSIONS - 1);
+  for (;;) {
+    const result = write(bodyKey(session.id), session);
+    if (result === 'ok') break;
+    const oldest = others.pop();
+    if (result !== 'full' || !oldest) return { failed: result };
+    remove(bodyKey(oldest.id));
+  }
+  const list = [summarise(session), ...others];
+  const listed = write(INDEX_KEY, list);
+  return listed === 'ok' ? { list } : { failed: listed };
+};
+
+// ---- the list --------------------------------------------------------------
+
+/** Every saved session, newest first, for the home screen. */
+export const sessionsAtom = atom<readonly SessionSummary[]>(readIndex());
+
+/** Forget a session. */
+export const deleteSessionAtom = atom(null, (get, set, id: string) => {
+  remove(bodyKey(id));
+  const list = get(sessionsAtom).filter((s) => s.id !== id);
+  write(INDEX_KEY, list);
+  set(sessionsAtom, list);
+});
+
+// ---- opening ---------------------------------------------------------------
+
+const toFile = (saved: SavedFile): File =>
+  new File([fromBase64(saved.data) as BlobPart], saved.name);
+
+/** The system as it stood when a session was opened: opening one isn't a change worth saving. */
+let asOpened: Editable | null = null;
 
 /**
  * Rebuild the editor from a saved session: the files are parsed again for
@@ -137,11 +239,8 @@ const toLoaded = (saved: SavedFile): File => {
  * it started. Resolves `false` if the files couldn't be read again, in which
  * case only the channels and keys came back.
  */
-const restoreSession = async (
-  session: Session,
-  store: ReturnType<typeof useStore>,
-): Promise<boolean> => {
-  const incoming = [session.files.me1, session.files.meu].flatMap((f) => (f ? [toLoaded(f)] : []));
+const restore = async (session: Session, set: Setter): Promise<boolean> => {
+  const incoming = [session.files.me1, session.files.meu].flatMap((f) => (f ? [toFile(f)] : []));
   let base: Editable = blank();
   let files: LoadedFiles = {};
   let ok = true;
@@ -155,92 +254,124 @@ const restoreSession = async (
     }
   }
   const restored: Editable = { ...base, channels: session.channels, keys: session.keys };
+  const identity = { files, configName: session.configName, sessionId: session.id };
+  asOpened = restored;
   if (session.dirty && ok) {
-    store.set(replaceSystemAtom, { system: base, files, configName: session.configName });
-    store.set(editAtom, () => restored);
+    set(replaceSystemAtom, { system: base, ...identity });
+    set(editAtom, () => restored);
   } else {
-    store.set(replaceSystemAtom, { system: restored, files, configName: session.configName });
+    set(replaceSystemAtom, { system: restored, ...identity });
   }
   return ok;
 };
 
-// ---- restoring at startup --------------------------------------------------
-
-/** The session saved by the last visit, read once as the page loads. */
-const lastSession = readSession();
-let restoreBegun = false;
-
-/** True while the last session is being brought back; the page doesn't say how to begin meanwhile. */
-export const restoringAtom = atom(lastSession !== null);
-
 /**
- * Bring the last session back as the page opens, without asking: the editor
- * reopens where it was left, and New starts over.
+ * Open a saved session in the editor. Resolves `false`, with a notice, if it
+ * is gone or unreadable.
  */
-export const useRestoreOnLoad = (): void => {
-  const store = useStore();
-  useEffect(() => {
-    if (restoreBegun || !lastSession) return;
-    restoreBegun = true;
-    const done = (message: string, tone: 'success' | 'error') => {
-      store.set(restoringAtom, false);
-      store.set(toastAtom, { message, tone });
-    };
-    restoreSession(lastSession, store).then(
-      (ok) =>
-        ok
-          ? done(`Picked up where you left off: ${lastSession.configName}`, 'success')
-          : done(
-              'The original files couldn’t be read again; your channels and keys are back',
-              'error',
-            ),
-      () => done('Your last session couldn’t be brought back', 'error'),
+export const openSessionAtom = atom(null, async (get, set, id: string): Promise<boolean> => {
+  // Still open behind the home screen: go back to it as it is, undo history and all.
+  if (id === get(sessionIdAtom) && get(startedAtom)) {
+    set(screenAtom, 'editor');
+    return true;
+  }
+  const session = readJSON(bodyKey(id));
+  if (!isSession(session)) {
+    set(
+      sessionsAtom,
+      get(sessionsAtom).filter((s) => s.id !== id),
     );
-  }, [store]);
-};
+    set(toastAtom, { message: 'That session couldn’t be opened', tone: 'error' });
+    return false;
+  }
+  const ok = await restore({ ...session, id }, set).catch(() => null);
+  if (ok === null) {
+    set(toastAtom, { message: 'That session couldn’t be opened', tone: 'error' });
+    return false;
+  }
+  if (!ok) {
+    set(toastAtom, {
+      message: 'The original files couldn’t be read again; your channels and keys are back',
+      tone: 'error',
+    });
+  }
+  return true;
+});
 
 // ---- saving ----------------------------------------------------------------
 
 /**
- * Save the editor to localStorage a moment after each change, once the user
- * has started; a blank system with nothing loaded clears what was saved.
- * Storage that's unavailable or full is skipped quietly, with one notice if
- * it's full.
+ * Save the open session to localStorage a moment after each change, and keep
+ * the list of sessions in step. A blank system with nothing loaded isn't
+ * worth keeping and is taken off the list. Storage that's unavailable or full
+ * is skipped quietly, with one notice if it's full.
  */
 export const useAutosave = (): void => {
+  const store = useStore();
   const started = useAtomValue(startedAtom);
+  const sessionId = useAtomValue(sessionIdAtom);
   const system = useAtomValue(systemAtom);
   const configName = useAtomValue(configNameAtom);
   const files = useAtomValue(filesAtom);
   const dirty = useAtomValue(dirtyAtom);
-  const toast = useSetAtom(toastAtom);
   const warned = useRef(false);
   const pending = useRef<(() => void) | null>(null);
+  /** What was last saved (or opened), so the same thing isn't saved twice. */
+  const last = useRef<{
+    system: Editable;
+    configName: string;
+    files: LoadedFiles;
+    dirty: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!started) return;
+    if (asOpened === system) {
+      last.current = { system, configName, files, dirty };
+      asOpened = null;
+    }
+    const before = last.current;
+    if (
+      before?.system === system &&
+      before.configName === configName &&
+      before.files === files &&
+      before.dirty === dirty
+    ) {
+      return;
+    }
     const save = () => {
+      // Already saved early (going home, closing the tab): don't save it again later.
+      if (pending.current !== save) return;
       pending.current = null;
-      // A blank, untouched system isn't a session worth offering back.
-      if (!files.me1 && !files.meu && !dirty) {
-        discardSession();
+      last.current = { system, configName, files, dirty };
+      // A blank system with nothing loaded isn't a session worth keeping.
+      if (!files.me1 && !files.meu && isBlank(system)) {
+        if (store.get(sessionsAtom).some((s) => s.id === sessionId)) {
+          store.set(deleteSessionAtom, sessionId);
+        }
         return;
       }
-      const result = writeSession({
-        version: 1,
-        savedAt: Date.now(),
-        configName,
-        files: {
-          ...(files.me1 ? { me1: saveFile(files.me1) } : {}),
-          ...(files.meu ? { meu: saveFile(files.meu) } : {}),
+      const result = storeSession(
+        {
+          version: 2,
+          id: sessionId,
+          savedAt: Date.now(),
+          configName,
+          files: {
+            ...(files.me1 ? { me1: saveFile(files.me1) } : {}),
+            ...(files.meu ? { meu: saveFile(files.meu) } : {}),
+          },
+          channels: system.channels,
+          keys: system.keys,
+          dirty,
         },
-        channels: system.channels,
-        keys: system.keys,
-        dirty,
-      });
-      if (result === 'full' && !warned.current) {
+        store.get(sessionsAtom),
+      );
+      if ('list' in result) {
+        store.set(sessionsAtom, result.list);
+      } else if (result.failed === 'full' && !warned.current) {
         warned.current = true;
-        toast({
+        store.set(toastAtom, {
           message: 'Browser storage is full, so this session won’t be kept after a reload',
           tone: 'info',
         });
@@ -248,8 +379,18 @@ export const useAutosave = (): void => {
     };
     pending.current = save;
     const timer = setTimeout(save, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [started, system, configName, files, dirty, toast]);
+    return () => {
+      clearTimeout(timer);
+      // Leaving this session for another: save it now, before the other takes over.
+      if (pending.current === save && store.get(sessionIdAtom) !== sessionId) save();
+    };
+  }, [store, started, sessionId, system, configName, files, dirty]);
+
+  // The home screen lists sessions: have the open one saved before it's shown.
+  const screen = useAtomValue(screenAtom);
+  useEffect(() => {
+    if (screen === 'home') pending.current?.();
+  }, [screen]);
 
   // Don't lose the last half-second of edits when the tab closes.
   useEffect(() => {

@@ -5,9 +5,10 @@
  */
 
 import { buildME1Config, buildMEUConfig, type Issue } from '@mcmillan/2me2u-core';
-import { atom } from 'jotai';
+import { atom, type Getter } from 'jotai';
 import { blank, clean, type Editable, fromSystem } from './edit.ts';
-import { configNameOf, type Loaded, type LoadedFiles, load } from './files.ts';
+import { example } from './example.ts';
+import { configNameOf, type FileKind, kindOf, kindsOf, type LoadedFiles, load } from './files.ts';
 
 // ---- the system ------------------------------------------------------------
 
@@ -22,11 +23,22 @@ export const configNameAtom = atom('NEWMIX');
 export const loadIssuesAtom = atom<readonly Issue[]>([]);
 
 /**
- * False until the user loads files, starts a new system or makes an edit, or
- * the last session is brought back. Until then the page shows how to begin,
- * and nothing is autosaved.
+ * False until the user loads files, starts a new system, opens a session or
+ * makes an edit. Nothing is autosaved until then.
  */
 export const startedAtom = atom(false);
+
+/** Home lists past sessions and the ways to begin; the editor has one session open. */
+export type Screen = 'home' | 'editor';
+export const screenAtom = atom<Screen>('home');
+
+const newSessionId = (): string => crypto.randomUUID();
+/**
+ * Which saved session the editor's work belongs to. Every new system, load of
+ * files or opened session starts or resumes one, so work is never saved over
+ * a different session's.
+ */
+export const sessionIdAtom = atom(newSessionId());
 
 const draftAtom = atom((get) => clean(get(systemAtom)));
 export const me1Atom = atom((get) => buildME1Config(get(draftAtom)));
@@ -162,11 +174,26 @@ export const dismissToastAtom = atom(null, (get, set, id: number) => {
 
 // ---- lifecycle -------------------------------------------------------------
 
-/** Replace the whole system (load, new, restore): resets history and the unsaved marker. */
+/**
+ * Replace the whole system (load, new, an opened session): resets history and
+ * the unsaved marker, and shows the editor.
+ */
 export const replaceSystemAtom = atom(
   null,
-  (_get, set, next: { system: Editable; files?: LoadedFiles; configName?: string }) => {
+  (
+    _get,
+    set,
+    next: {
+      system: Editable;
+      files?: LoadedFiles;
+      configName?: string;
+      /** The saved session this resumes; a new one starts otherwise. */
+      sessionId?: string;
+    },
+  ) => {
     lastMerge = null;
+    set(sessionIdAtom, next.sessionId ?? newSessionId());
+    set(screenAtom, 'editor');
     set(systemAtom, next.system);
     set(baselineAtom, next.system);
     set(savedAtom, built(next.system));
@@ -181,9 +208,30 @@ export const replaceSystemAtom = atom(
   },
 );
 
-/** Start a blank system. */
-export const resetAtom = atom(null, (_get, set) => {
+/**
+ * Start a blank system. The one that was open stays in the list of sessions,
+ * so nothing has to be confirmed; a note says where it went.
+ */
+export const resetAtom = atom(null, (get, set) => {
+  const files = get(filesAtom);
+  const kept = get(screenAtom) === 'editor' && (get(dirtyAtom) || files.me1 || files.meu);
   set(replaceSystemAtom, { system: blank() });
+  if (kept) {
+    set(toastAtom, {
+      message: 'New system started. The one you had open is on the home screen.',
+      tone: 'success',
+    });
+  }
+});
+
+/** Start from the built-in example, to see a filled-in system before making one. */
+export const startExampleAtom = atom(null, (_get, set) => {
+  set(replaceSystemAtom, { system: example(), configName: 'EXAMPLE' });
+});
+
+/** Back to the list of sessions; the open one keeps being saved. */
+export const goHomeAtom = atom(null, (_get, set) => {
+  set(screenAtom, 'home');
 });
 
 /** Mark one file as saved, after it's exported. */
@@ -192,25 +240,69 @@ export const markSavedAtom = atom(null, (get, set, file: 'me1' | 'meu') => {
   set(savedAtom, { ...get(savedAtom), [file]: now[file] });
 });
 
-/** Read dropped or picked files on top of whatever is already loaded, changing nothing yet. */
-export const readFilesAtom = atom(null, (get, _set, incoming: Iterable<File>) =>
-  load(incoming, get(filesAtom)),
-);
+/**
+ * Whether files of these kinds are the other half of what's open: a `.meu`
+ * for a system loaded from an `.ME1` alone, or the reverse. They join the
+ * open session; anything else starts a new one.
+ */
+const joins = (get: Getter, kinds: readonly FileKind[]): boolean => {
+  const open = get(filesAtom);
+  return (
+    get(screenAtom) === 'editor' &&
+    (open.me1 !== undefined) !== (open.meu !== undefined) &&
+    kinds.length === 1 &&
+    kinds.every((kind) => open[kind] === undefined)
+  );
+};
+
+const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Put files that were read into the editor, or note why they couldn't be:
- * `loadIssuesAtom` holds the reasons, which the page shows as a notice.
+ * Open picked or dropped `.ME1` / `.meu` files. Nothing is overwritten: they
+ * start a new session, and the one that was open stays in the list. The
+ * exception is the other half of what's open (see `joins`), which is added to
+ * the open session: the new file brings its half (a `.meu` the channels, an
+ * `.ME1` the keys) and the edits to the other half stay, as one undoable
+ * step. Files that can't be read leave everything as it was, with the
+ * reasons in `loadIssuesAtom` for the page to show.
  */
-export const openLoadedAtom = atom(null, (get, set, loaded: Loaded) => {
-  if (loaded.ok) {
-    set(replaceSystemAtom, {
-      system: fromSystem(loaded.system),
-      files: loaded.files,
-      configName: loaded.files.me1 ? configNameOf(loaded.files.me1.name) : get(configNameAtom),
-    });
-    const names = [loaded.files.me1?.name, loaded.files.meu?.name].filter(Boolean).join(' and ');
-    set(toastAtom, { message: `Loaded ${names}`, tone: 'success' });
-  } else if (loaded.issues) {
-    set(loadIssuesAtom, loaded.issues);
+export const openFilesAtom = atom(null, async (get, set, incoming: readonly File[]) => {
+  const kinds = kindsOf(incoming);
+  if (kinds.length === 0) return;
+  const joining = joins(get, kinds);
+  const loaded = await load(incoming, joining ? get(filesAtom) : {});
+  if (!loaded.ok) {
+    if (loaded.issues) set(loadIssuesAtom, loaded.issues);
+    return;
   }
+  const names = incoming.flatMap((file) => (kindOf(file) ? [file.name] : [])).join(' and ');
+  const fresh = fromSystem(loaded.system);
+  const configName = loaded.files.me1 ? configNameOf(loaded.files.me1.name) : get(configNameAtom);
+  // The files may have taken a moment to read: check again that they still join what's open.
+  if (joining && joins(get, kinds)) {
+    const before = get(systemAtom);
+    const kept: Editable =
+      kinds[0] === 'meu'
+        ? { ...fresh, keys: before.keys }
+        : { ...fresh, channels: before.channels };
+    set(replaceSystemAtom, {
+      system: fresh,
+      files: loaded.files,
+      configName,
+      sessionId: get(sessionIdAtom),
+    });
+    if (!same(kept.keys, fresh.keys) || !same(kept.channels, fresh.channels)) {
+      set(editAtom, () => kept);
+    }
+    set(toastAtom, { message: `Added ${names}`, tone: 'success' });
+    return;
+  }
+  const leaving = get(screenAtom) === 'editor' && (get(dirtyAtom) || get(filesAtom).me1);
+  set(replaceSystemAtom, { system: fresh, files: loaded.files, configName });
+  set(toastAtom, {
+    message: leaving
+      ? `Loaded ${names}. The system you had open is on the home screen.`
+      : `Loaded ${names}`,
+    tone: 'success',
+  });
 });

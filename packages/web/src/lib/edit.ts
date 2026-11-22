@@ -338,3 +338,8 @@ export const levelText = (level: Level | undefined): string => {
   const db = Math.round((level ?? 0) * 10) / 10;
   return db === 0 ? '0 dB' : `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`;
 };
+
+/** Whether a system is as a new one starts: no channel named or linked, no key assigned. */
+export const isBlank = (system: Editable): boolean =>
+  system.channels.every((c) => !c.name && !c.stereo) &&
+  system.keys.every((k) => k.type === 'unassigned');

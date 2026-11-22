@@ -1,11 +1,13 @@
-import type { Key } from '@mcmillan/2me2u-core';
+import { buildME1Config, buildMEUConfig, type Key } from '@mcmillan/2me2u-core';
 import { describe, expect, it } from 'vitest';
 import {
   blank,
   canPick,
   channelUses,
+  clean,
   type Editable,
   groupHolding,
+  isBlank,
   keyLabel,
   keyPlays,
   levelText,
@@ -14,6 +16,7 @@ import {
   setKeyType,
   setStereo,
 } from '../src/lib/edit.ts';
+import { example } from '../src/lib/example.ts';
 
 const withKeys = (...keys: Key[]): Editable =>
   keys.reduce((system, key, i) => setKey(system, i, key), blank());
@@ -218,5 +221,27 @@ describe('keyLabel', () => {
       ),
     };
     expect(keyLabel(system, system.keys[0] as Key)).toBe('KitPad');
+  });
+});
+
+describe('example', () => {
+  it('is a system the ME-1 and ME-U would accept', () => {
+    const system = clean(example());
+    expect(buildME1Config(system).isOk).toBe(true);
+    expect(buildMEUConfig(system).isOk).toBe(true);
+  });
+
+  it('shows every kind of key', () => {
+    const types = new Set(example().keys.map((k) => k.type));
+    expect([...types].sort()).toEqual(['auto', 'channel', 'group', 'unassigned']);
+  });
+});
+
+describe('isBlank', () => {
+  it('is true only for a system with nothing set', () => {
+    expect(isBlank(blank())).toBe(true);
+    expect(isBlank(withKeys({ type: 'auto' }))).toBe(false);
+    expect(isBlank(setStereo(blank(), 1, true))).toBe(false);
+    expect(isBlank(example())).toBe(false);
   });
 });

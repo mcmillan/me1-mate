@@ -1,6 +1,6 @@
 /**
  * Keyboard shortcuts for the editor: ⌘Z / Ctrl+Z undoes, ⇧⌘Z / Ctrl+Shift+Z /
- * Ctrl+Y redoes, once there is something to undo. What happened is announced,
+ * Ctrl+Y redoes, while the editor is showing. What happened is announced,
  * since nothing else tells a screen reader.
  *
  * In a text field the browser's own undo wins: someone fixing a typo in a name
@@ -12,7 +12,7 @@
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { useEffect } from 'react';
 import { announce } from './announce.ts';
-import { canRedoAtom, canUndoAtom, redoAtom, startedAtom, undoAtom } from './store.ts';
+import { canRedoAtom, canUndoAtom, redoAtom, screenAtom, undoAtom } from './store.ts';
 
 const isTextEntry = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
@@ -27,13 +27,13 @@ const isTextEntry = (target: EventTarget | null): boolean => {
 };
 
 export const useShortcuts = (): void => {
-  const started = useAtomValue(startedAtom);
+  const editing = useAtomValue(screenAtom) === 'editor';
   const undo = useSetAtom(undoAtom);
   const redo = useSetAtom(redoAtom);
   const store = useStore();
 
   useEffect(() => {
-    if (!started) return;
+    if (!editing) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.altKey) return;
       if (!(e.metaKey || e.ctrlKey) || isTextEntry(e.target)) return;
@@ -50,5 +50,5 @@ export const useShortcuts = (): void => {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [started, undo, redo, store]);
+  }, [editing, undo, redo, store]);
 };
