@@ -35,7 +35,6 @@ const HOME_CSS = `
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
 .home-mark { margin: 0 0 0.18em; font-size: clamp(3.25rem, 2rem + 5.5vw, 5.25rem); line-height: 1; }
 .home-pitch { max-inline-size: 31ch; margin: 22px 0 0; font-size: clamp(1.125rem, 1rem + 0.4vw, 1.25rem); font-weight: var(--w-text); line-height: 1.45; text-wrap: pretty; }
-.home-pitch .home-quiet { color: var(--muted); }
 .home-nw { white-space: nowrap; }
 
 .home-ways { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
@@ -53,7 +52,7 @@ const HOME_CSS = `
 @media (hover: hover) {
   .home-where summary:hover { color: var(--ink); }
 }
-.home-where dl { display: grid; gap: 10px; max-inline-size: 52ch; margin: 8px 0 0; padding-inline-start: 19px; }
+.home-where dl { display: grid; gap: 12px; max-inline-size: 52ch; margin: 6px 0 0; padding: 14px 18px; border-radius: 16px; background: var(--well); }
 .home-where dt { font-weight: var(--w-strong); }
 .home-where dd { margin: 0; color: var(--muted); font-weight: var(--w-text); text-wrap: pretty; }
 .home-where b { color: var(--ink); font-weight: var(--w-strong); }
@@ -106,8 +105,7 @@ const HOME_CSS = `
   .home-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 }
 @media (min-width: 900px) {
-  .home-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 56px; }
-  .home-where { margin-block-end: -6px; }
+  .home-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 56px; }
 }
 /* A short laptop window: keep the three steps on the first screen. */
 @media (min-width: 900px) and (max-height: 760px) {
@@ -268,7 +266,7 @@ export const Home = () => {
             <p className="home-pitch">
               Set up the keys of an Allen &amp; Heath <span className="home-nw">ME-1</span> personal
               mixer, and the channel names of its <span className="home-nw">ME-U</span> hub, in your
-              browser. <span className="home-quiet">Your files never leave this computer.</span>
+              browser.
             </p>
           </div>
           <section aria-labelledby={`${id}-begin`}>
