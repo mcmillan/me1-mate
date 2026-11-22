@@ -1,4 +1,4 @@
-# 2me2u
+# ME-1 Mate
 
 Read, build and write the files behind an Allen & Heath ME personal monitoring
 system: ME-1 configs (`.ME1`) and ME-U channel setups (`.meu`).
@@ -12,10 +12,10 @@ the mixer itself.
 
 ## Packages
 
-| Package                                 | What it is                                                                             |
-| --------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`@mcmillan/2me2u-core`](packages/core) | The library: one model of a monitoring system, read from and written to both formats.  |
-| [`@mcmillan/2me2u-web`](packages/web)   | A browser editor built on the library: load, edit, create and export, all client-side. |
+| Package                                    | What it is                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| [`@mcmillan/me1-mate-core`](packages/core) | The library: one model of a monitoring system, read from and written to both formats.  |
+| [`@mcmillan/me1-mate-web`](packages/web)   | A browser editor built on the library: load, edit, create and export, all client-side. |
 
 Each package's README covers its API. `AGENTS.md` is for anyone changing the code.
 

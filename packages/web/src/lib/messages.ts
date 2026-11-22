@@ -4,7 +4,7 @@
  * fix them.
  */
 
-import { type Issue, KEY_COUNT, type Key, LEVEL_MAX, LEVEL_MIN } from '@mcmillan/2me2u-core';
+import { type Issue, KEY_COUNT, type Key, LEVEL_MAX, LEVEL_MIN } from '@mcmillan/me1-mate-core';
 import { useAtomValue } from 'jotai';
 import type { Editable } from './edit.ts';
 import { issuesAtom, systemAtom } from './store.ts';

@@ -1,4 +1,4 @@
-import { buildME1Config, buildMEUConfig, type Key } from '@mcmillan/2me2u-core';
+import { buildME1Config, buildMEUConfig, type Key } from '@mcmillan/me1-mate-core';
 import { describe, expect, it } from 'vitest';
 import {
   blank,

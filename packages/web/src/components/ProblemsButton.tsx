@@ -1,4 +1,4 @@
-import type { Issue } from '@mcmillan/2me2u-core';
+import type { Issue } from '@mcmillan/me1-mate-core';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { SizableText, XStack, YStack } from 'tamagui';
 import { describeIssue, issueIsAt, issueKey } from '../lib/messages.ts';

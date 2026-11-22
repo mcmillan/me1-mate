@@ -1,4 +1,4 @@
-import { LEVEL_MAX, LEVEL_MIN, type Level } from '@mcmillan/2me2u-core';
+import { LEVEL_MAX, LEVEL_MIN, type Level } from '@mcmillan/me1-mate-core';
 import {
   type CSSProperties,
   type KeyboardEvent,

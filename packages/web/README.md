@@ -1,7 +1,7 @@
-# @mcmillan/2me2u-web
+# @mcmillan/me1-mate-web
 
 A browser editor for ME-1 configs (`.ME1`) and ME-U channel setups (`.meu`),
-built on [`@mcmillan/2me2u-core`](../core). Everything runs in the browser;
+built on [`@mcmillan/me1-mate-core`](../core). Everything runs in the browser;
 files never leave the machine.
 
 Live at <https://mcmillan.github.io/2me2u/>, deployed by
@@ -9,7 +9,7 @@ Live at <https://mcmillan.github.io/2me2u/>, deployed by
 
 The app has two screens.
 
-**Home** is the front door: what 2me2u is, three ways to begin (open files,
+**Home** is the front door: what ME-1 Mate is, three ways to begin (open files,
 start a new system, or try a built-in example band), a three-step "how it
 works", and your past sessions. Every system you work on is a session, saved
 in the browser as you go; the last 12 are listed with a small picture of their
@@ -64,9 +64,9 @@ the original, so everything the editor doesn't show is kept.
 ## Develop
 
 ```sh
-pnpm dev        # from the repo root, or `pnpm --filter @mcmillan/2me2u-web dev`
+pnpm dev        # from the repo root, or `pnpm --filter @mcmillan/me1-mate-web dev`
 pnpm build      # production build into packages/web/dist
-pnpm --filter @mcmillan/2me2u-web test   # unit tests for src/lib
+pnpm --filter @mcmillan/me1-mate-web test   # unit tests for src/lib
 BASE_PATH=/2me2u/ pnpm build   # as deployed to GitHub Pages
 ```
 
@@ -83,7 +83,7 @@ src
 ├── components/
 │   ├── Home.tsx, SessionList.tsx    the home screen and the list of sessions
 │   ├── TopBar.tsx       wordmark, config name, undo/redo, open, new, tour, problems, export
-│   ├── Wordmark.tsx     the 2me2u logo, its 2s on tilted keys
+│   ├── Wordmark.tsx     the ME-1 Mate logo, set like a front-panel label
 │   ├── KeyGrid.tsx      the 16 keys in the ME-1's 2×8 layout
 │   ├── Inspector.tsx    editor for the selected key
 │   ├── ChannelGrid.tsx  channel names, stereo links, picking channels for a key

@@ -4,7 +4,7 @@
  * plays, the inspector while it's selected.
  */
 
-import type { Key } from '@mcmillan/2me2u-core';
+import type { Key } from '@mcmillan/me1-mate-core';
 import type { CSSProperties } from 'react';
 
 /** The typeface, for places that set a font family themselves; styles.css sets it for the page. */

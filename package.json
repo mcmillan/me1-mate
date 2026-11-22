@@ -1,5 +1,5 @@
 {
-  "name": "@mcmillan/2me2u",
+  "name": "@mcmillan/me1-mate",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.9.1",
@@ -7,7 +7,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "dev": "pnpm --filter @mcmillan/2me2u-web dev",
+    "dev": "pnpm --filter @mcmillan/me1-mate-web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

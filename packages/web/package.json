@@ -1,5 +1,5 @@
 {
-  "name": "@mcmillan/2me2u-web",
+  "name": "@mcmillan/me1-mate-web",
   "version": "0.1.0",
   "description": "Browser editor for Allen & Heath ME-1 configs and ME-U channel setups",
   "private": true,
@@ -15,7 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mcmillan/2me2u-core": "workspace:*",
+    "@mcmillan/me1-mate-core": "workspace:*",
     "@tamagui/config": "^3.2.2",
     "@tamagui/core": "3.2.2",
     "@tamagui/vite-plugin": "^3.2.2",

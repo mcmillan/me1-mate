@@ -6,7 +6,7 @@
  * Everything stays in this browser's localStorage.
  */
 
-import type { Channel, Key } from '@mcmillan/2me2u-core';
+import type { Channel, Key } from '@mcmillan/me1-mate-core';
 import { atom, type Setter, useAtomValue, useStore } from 'jotai';
 import { useEffect, useRef } from 'react';
 import { blank, type Editable, fromSystem, isBlank, keyLabel } from './edit.ts';
@@ -25,6 +25,7 @@ import {
 } from './store.ts';
 
 /** The list of sessions, newest first: enough to show them without reading each one. */
+// The keys keep the app's first name, 2me2u, so sessions saved before the rename still open.
 const INDEX_KEY = '2me2u:sessions:v2';
 const bodyKey = (id: string): string => `2me2u:session:v2:${id}`;
 /** The single session earlier versions kept; it's moved into the list when found. */

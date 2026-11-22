@@ -3,7 +3,7 @@
  * before making one: named channels, stereo pairs, and keys of every kind.
  */
 
-import type { Channel, Key } from '@mcmillan/2me2u-core';
+import type { Channel, Key } from '@mcmillan/me1-mate-core';
 import { blank, type Editable } from './edit.ts';
 
 /** Channel names by number; a pair's name is its first channel's. */

@@ -33,7 +33,7 @@ const HOME_CSS = `
 .home-sr { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
-.home-mark { margin: 0 0 0.18em; font-size: clamp(3.5rem, 2.25rem + 6.5vw, 6rem); line-height: 1; }
+.home-mark { margin: 0 0 0.18em; font-size: clamp(3.25rem, 2rem + 5.5vw, 5.25rem); line-height: 1; }
 .home-pitch { max-inline-size: 31ch; margin: 22px 0 0; font-size: clamp(1.125rem, 1rem + 0.4vw, 1.25rem); font-weight: var(--w-text); line-height: 1.45; text-wrap: pretty; }
 .home-pitch .home-quiet { color: var(--muted); }
 .home-nw { white-space: nowrap; }
@@ -263,7 +263,7 @@ export const Home = () => {
           <div>
             <h1 className="display home-mark">
               <Wordmark />
-              <span className="home-sr">2me2u</span>
+              <span className="home-sr">ME-1 Mate</span>
             </h1>
             <p className="home-pitch">
               Set up the keys of an Allen &amp; Heath <span className="home-nw">ME-1</span> personal

@@ -1,8 +1,8 @@
 # Working in this repo
 
-2me2u reads and writes Allen & Heath ME-1 (`.ME1`) and ME-U (`.meu`) files
-through one model of a monitoring system (`@mcmillan/2me2u-core`), and offers a
-browser editor on top of it (`@mcmillan/2me2u-web`). The root `README.md` introduces the
+ME-1 Mate reads and writes Allen & Heath ME-1 (`.ME1`) and ME-U (`.meu`) files
+through one model of a monitoring system (`@mcmillan/me1-mate-core`), and offers a
+browser editor on top of it (`@mcmillan/me1-mate-web`). The root `README.md` introduces the
 repo and each package's own `README.md` documents its API; this file is for
 anyone (human or agent) changing the code.
 

@@ -8,7 +8,7 @@
  * is kept but not shown.
  */
 
-import { CHANNEL_COUNT, KEY_COUNT, type Key } from '@mcmillan/2me2u-core';
+import { CHANNEL_COUNT, KEY_COUNT, type Key } from '@mcmillan/me1-mate-core';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   type ClipboardEvent,

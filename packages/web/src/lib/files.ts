@@ -6,7 +6,7 @@ import {
   parseME1Config,
   parseMEUConfig,
   type System,
-} from '@mcmillan/2me2u-core';
+} from '@mcmillan/me1-mate-core';
 
 export interface LoadedFile {
   readonly name: string;

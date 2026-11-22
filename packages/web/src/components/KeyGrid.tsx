@@ -1,4 +1,4 @@
-import type { Key } from '@mcmillan/2me2u-core';
+import type { Key } from '@mcmillan/me1-mate-core';
 import { useAtom, useAtomValue } from 'jotai';
 import { type CSSProperties, type KeyboardEvent, useId, useRef } from 'react';
 import { Theme } from 'tamagui';

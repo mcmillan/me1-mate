@@ -1,5 +1,5 @@
 /**
- * Pure edits on a system. The model from `2me2u` is readonly plain data, so
+ * Pure edits on a system. The model from the core package is readonly plain data, so
  * every edit returns a new system and React state stays immutable.
  */
 
@@ -10,7 +10,7 @@ import {
   type Key,
   type Level,
   type System,
-} from '@mcmillan/2me2u-core';
+} from '@mcmillan/me1-mate-core';
 
 /** A complete system as the editor holds it. */
 export type Editable = Pick<System, 'channels' | 'keys' | 'source'>;

@@ -4,7 +4,7 @@
  * Every edit goes through `editAtom`, which records history for undo.
  */
 
-import { buildME1Config, buildMEUConfig, type Issue } from '@mcmillan/2me2u-core';
+import { buildME1Config, buildMEUConfig, type Issue } from '@mcmillan/me1-mate-core';
 import { atom, type Getter } from 'jotai';
 import { blank, clean, type Editable, fromSystem } from './edit.ts';
 import { example } from './example.ts';

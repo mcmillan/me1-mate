@@ -180,7 +180,7 @@ const Brand = ({ tip }: { readonly tip: string }) => {
   const goHome = useSetAtom(goHomeAtom);
   return (
     <>
-      <h1 className="top-said">2me2u</h1>
+      <h1 className="top-said">ME-1 Mate</h1>
       <button
         type="button"
         className="display top-brand"

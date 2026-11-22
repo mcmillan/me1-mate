@@ -193,7 +193,7 @@ importers:
 
   packages/web:
     dependencies:
-      '@mcmillan/2me2u-core':
+      '@mcmillan/me1-mate-core':
         specifier: workspace:*
         version: link:../core
       '@tamagui/config':
