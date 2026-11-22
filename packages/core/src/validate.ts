@@ -10,6 +10,8 @@ import {
   LEVEL_MAX,
   LEVEL_MIN,
   type Level,
+  PAN_MAX,
+  PAN_MIN,
   pairStart,
 } from './model.ts';
 import type { System } from './system.ts';
@@ -30,7 +32,17 @@ const levelIssues = (level: Level | undefined, at: string): Issues =>
   );
 
 const panIssues = (pan: number | undefined, at: string): Issues =>
-  issueUnless(pan === undefined || isByte(pan), at, 'pan must be 0–255');
+  issueUnless(
+    pan === undefined || (Number.isInteger(pan) && pan >= PAN_MIN && pan <= PAN_MAX),
+    at,
+    `pan must be a whole number ${PAN_MIN}–${PAN_MAX}`,
+  );
+
+const mutedIssues = (muted: boolean | undefined, at: string): Issues =>
+  issueUnless(muted === undefined || typeof muted === 'boolean', at, 'muted must be true or false');
+
+const rawPanIssues = (pan: number | undefined, at: string): Issues =>
+  issueUnless(pan === undefined || isByte(pan), at, 'pan must be a byte');
 
 const channelIssues = (channels: readonly Channel[], ch: number, at: string): Issues =>
   !(Number.isInteger(ch) && ch >= 1 && ch <= CHANNEL_COUNT)
@@ -46,7 +58,7 @@ const keyIssues = (key: Key, channels: readonly Channel[], at: string): Issues =
     case 'unassigned':
       return [];
     case 'auto':
-      return levelIssues(key.level, `${at}.level`);
+      return [...levelIssues(key.level, `${at}.level`), ...mutedIssues(key.muted, `${at}.muted`)];
     case 'channel':
       return [
         ...channelIssues(channels, key.channel, `${at}.channel`),
@@ -58,6 +70,7 @@ const keyIssues = (key: Key, channels: readonly Channel[], at: string): Issues =
         ),
         ...levelIssues(key.level, `${at}.level`),
         ...panIssues(key.pan, `${at}.pan`),
+        ...mutedIssues(key.muted, `${at}.muted`),
       ];
     case 'group':
       return [
@@ -73,6 +86,20 @@ const keyIssues = (key: Key, channels: readonly Channel[], at: string): Issues =
           ...levelIssues(m.level, `${at}.members[${j}].level`),
           ...panIssues(m.pan, `${at}.members[${j}].pan`),
         ]),
+        ...mutedIssues(key.muted, `${at}.muted`),
+      ];
+    case 'aux':
+    case 'tone':
+      return [
+        ...nameIssues(
+          key.name,
+          KEY_NAME_PATTERN,
+          'key names are 1–6 of 0-9, A-Z, a-z, space',
+          `${at}.name`,
+        ),
+        ...levelIssues(key.level, `${at}.level`),
+        ...(key.type === 'aux' ? panIssues(key.pan, `${at}.pan`) : []),
+        ...mutedIssues(key.muted, `${at}.muted`),
       ];
     case 'unknown':
       return [
@@ -85,7 +112,7 @@ const keyIssues = (key: Key, channels: readonly Channel[], at: string): Issues =
           `${at}.name`,
         ),
         ...levelIssues(key.level, `${at}.level`),
-        ...panIssues(key.pan, `${at}.pan`),
+        ...rawPanIssues(key.pan, `${at}.pan`),
       ];
   }
 };

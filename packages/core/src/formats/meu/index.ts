@@ -9,12 +9,13 @@ import { check, collect, combine, invalid, under, type Validated } from '../../i
 import { type Channel, channelName } from '../../model.ts';
 
 interface MEUChannelRecord {
-  /** Unnamed channels hold their number, e.g. "30". */
+  /** Unnamed channels hold their number, e.g. "30"; one file has an empty name. */
   readonly name: string;
   readonly stereoLink: boolean;
   /**
-   * `UseReceivedNameAndStereo`. True in every file, even with user names set;
-   * presumably prefers names and links from upstream when there are any.
+   * `UseReceivedNameAndStereo`. True on every channel of one file and false on
+   * every channel of another, both with user names set; presumably prefers
+   * names and links from upstream when there are any. Not modelled, carried.
    */
   readonly useReceivedNameAndStereo: boolean;
 }
@@ -71,25 +72,38 @@ export interface MEUDocument {
   readonly file: MEUFile;
 }
 
+/**
+ * Whether a stored name leaves channel `n` unnamed: its own number, or empty.
+ * What the ME-1 shows for an empty name isn't known; it's read as unnamed and
+ * written back as it was read.
+ */
+const isUnnamed = (name: string, n: number): boolean => name === String(n) || name === '';
+
 export const MEU = {
   decode: (data: string | Uint8Array): Validated<MEUDocument> =>
     MEUFile.decode(data).map((file) => ({
       channels: file.channels.map(
         (c, i): Channel => ({
-          ...(c.name === String(i + 1) ? {} : { name: c.name }),
+          ...(isUnnamed(c.name, i + 1) ? {} : { name: c.name }),
           ...(c.stereoLink ? { stereo: true } : {}),
         }),
       ),
       file,
     })),
 
-  /** Encode channels as a setup, keeping settings from the setup they were read from (if any). */
+  /** Encode channels as a setup, keeping what the setup they were read from (if any) stores for them. */
   encode: (channels: readonly Channel[], base?: MEUFile): string =>
     MEUFile.encode({
-      channels: channels.map((c, i) => ({
-        name: channelName(channels, i + 1),
-        stereoLink: c.stereo === true,
-        useReceivedNameAndStereo: base?.channels[i]?.useReceivedNameAndStereo ?? true,
-      })),
+      channels: channels.map((c, i) => {
+        const was = base?.channels[i];
+        return {
+          name:
+            c.name === undefined && was !== undefined && isUnnamed(was.name, i + 1)
+              ? was.name
+              : channelName(channels, i + 1),
+          stereoLink: c.stereo === true,
+          useReceivedNameAndStereo: was?.useReceivedNameAndStereo ?? true,
+        };
+      }),
     }),
 };

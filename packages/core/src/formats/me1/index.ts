@@ -6,14 +6,16 @@
  */
 
 import Result from 'true-myth/result';
-import { check, collect, combine, invalid, type Validated } from '../../issues.ts';
+import { check, collect, combine, type Issues, invalid, type Validated } from '../../issues.ts';
 import {
+  CHANNEL_COUNT,
   type Channel,
   isStereo,
   KEY_COUNT,
   type Key,
   type Level,
   type Member,
+  PAN_CENTRE,
   pairStart,
 } from '../../model.ts';
 import type { System } from '../../system.ts';
@@ -31,10 +33,16 @@ import {
 } from './schema.ts';
 
 const KEY_STEREO = 0x01;
+const KEY_MUTE = 0x08;
 const KEY_CUSTOM_NAME = 0x10;
 const KEY_GROUP = 0x20;
 const KEY_AUTO = 0x40;
-const KEY_KNOWN = KEY_STEREO | KEY_CUSTOM_NAME | KEY_GROUP | KEY_AUTO;
+const KEY_KNOWN = KEY_STEREO | KEY_MUTE | KEY_CUSTOM_NAME | KEY_GROUP | KEY_AUTO;
+
+/** The source byte of the Aux Input. */
+const AUX_SOURCE = 40;
+/** The source byte of the test tone. */
+const TONE_SOURCE = 47;
 
 const SEND_LINKED = 0x01;
 const SEND_FIRST = 0x02;
@@ -63,49 +71,86 @@ const levelFromRaw = (raw: number): Level =>
 const rawFromLevel = (level: Level = 0): number =>
   level === 'off' ? LEVEL_OFF : Math.round(level * 256) + LEVEL_NOMINAL;
 
-const textOf = (raw: Uint8Array): string | undefined => {
-  if (raw[0] === 0) return undefined;
+/** The text of the name bytes: up to the first NUL, trailing spaces dropped. */
+const textOf = (raw: Uint8Array): string => {
   const end = raw.indexOf(0);
   return new TextDecoder('latin1').decode(end === -1 ? raw : raw.subarray(0, end)).trimEnd();
+};
+
+/**
+ * A record's custom name, if it has one. Without the custom-name flag the
+ * bytes are stale (often NUL-led, sometimes spaces) and the key shows its
+ * source's name.
+ */
+const nameOf = (r: KeyRecord): string | undefined => {
+  if (!(r.flags & KEY_CUSTOM_NAME)) return undefined;
+  return textOf(r.name) || undefined;
 };
 
 const ascii = (s: string): Uint8Array =>
   Uint8Array.from({ length: NAME_SIZE }, (_, i) => s.charCodeAt(i) || 0);
 
-/** Name bytes for `text`: the base bytes if they already say it, else a fresh encoding. */
-const nameBytes =
-  (pattern: RegExp, rule: string, pad: (t: string) => string) =>
-  (text: string | undefined, base: Uint8Array, path: string): Validated<Uint8Array> =>
-    textOf(base) === text
-      ? Result.ok(base)
-      : text === undefined
-        ? Result.ok(new Uint8Array(NAME_SIZE))
-        : pattern.test(text)
-          ? Result.ok(ascii(pad(text)))
-          : invalid(path, `invalid name ${JSON.stringify(text)}: ${rule}`);
+/** The name bytes and custom-name flag a record stores for a name. */
+interface NameFields {
+  readonly flag: number;
+  readonly bytes: Uint8Array;
+}
 
-/** Key names are stored space-padded to 7 characters, then NUL. */
-const keyName = nameBytes(KEY_NAME_PATTERN, 'use 1–6 of 0-9, A-Z, a-z, space', (t) =>
-  t.padEnd(NAME_SIZE - 1, ' '),
-);
+/**
+ * The name fields for `name`, over `base`: the base's own if it already says
+ * that name (so stale bytes survive), else a fresh encoding. Key names are
+ * stored space-padded to 7 characters, then NUL.
+ */
+const nameFields = (
+  name: string | undefined,
+  base: KeyRecord,
+  path: string,
+): Validated<NameFields> =>
+  nameOf(base) === name
+    ? Result.ok({ flag: base.flags & KEY_CUSTOM_NAME, bytes: base.name })
+    : name === undefined
+      ? // As the ME-1 does when a key loses its name: zero the first byte, leave the rest stale.
+        Result.ok({ flag: 0, bytes: Uint8Array.from(base.name, (b, i) => (i === 0 ? 0 : b)) })
+      : KEY_NAME_PATTERN.test(name)
+        ? Result.ok({ flag: KEY_CUSTOM_NAME, bytes: ascii(name.padEnd(NAME_SIZE - 1, ' ')) })
+        : invalid(path, `invalid name ${JSON.stringify(name)}: use 1–6 of 0-9, A-Z, a-z, space`);
+
+const muteFlag = (muted: boolean | undefined) => (muted ? KEY_MUTE : 0);
 
 const named = (name: string | undefined) => (name === undefined ? {} : { name });
 
 // ---- decode --------------------------------------------------------------
 
-const keyFromRecord = (r: KeyRecord, path: string): [Key, Link[]] => {
-  const name = textOf(r.name);
-  const level = levelFromRaw(r.level);
+/** Which kind of key a record holds. Combinations not seen in any file are `unknown`. */
+const kindOf = (r: KeyRecord): Key['type'] => {
+  const group = (r.flags & KEY_GROUP) !== 0;
+  const auto = (r.flags & KEY_AUTO) !== 0;
+  if (group && !auto && r.source === NO_SOURCE) return 'group';
+  if (group) return 'unknown';
+  // Auto Mode keys may keep a channel in `source` (not modelled, carried).
+  if (auto && (r.source === NO_SOURCE || r.source < CHANNEL_COUNT)) return 'auto';
+  if (!auto && r.source < CHANNEL_COUNT) return 'channel';
+  if (!auto && r.source === AUX_SOURCE) return 'aux';
+  if (!auto && r.source === TONE_SOURCE) return 'tone';
+  if (r.flags === 0 && r.source === NO_SOURCE) return 'unassigned';
+  return 'unknown';
+};
 
-  if (r.source !== NO_SOURCE) {
+const keyFromRecord = (r: KeyRecord, path: string): [Key, Link[]] => {
+  const name = nameOf(r);
+  const level = levelFromRaw(r.level);
+  const kind = kindOf(r);
+  const muted = r.flags & KEY_MUTE ? { muted: true } : {};
+
+  if (kind === 'channel') {
     const channel = r.source + 1;
     const linked = (r.flags & KEY_STEREO) !== 0;
     return [
-      { type: 'channel', channel, ...named(name), level, pan: r.pan },
+      { type: 'channel', channel, ...named(name), level, pan: r.pan, ...muted },
       (linked ? [channel, channel + 1] : [channel]).map((ch) => ({ channel: ch, linked, path })),
     ];
   }
-  if (r.flags & KEY_GROUP) {
+  if (kind === 'group') {
     const memberSends = r.sends
       .map((send, i) => ({ send, channel: i + 1 }))
       .filter(({ send }) => send.flags & SEND_MEMBER);
@@ -122,6 +167,7 @@ const keyFromRecord = (r: KeyRecord, path: string): [Key, Link[]] => {
             level: levelFromRaw(send.level),
             pan: send.pan,
           })),
+        ...muted,
       },
       memberSends.map(({ send, channel }) => ({
         channel,
@@ -130,8 +176,10 @@ const keyFromRecord = (r: KeyRecord, path: string): [Key, Link[]] => {
       })),
     ];
   }
-  if (r.flags & KEY_AUTO) return [{ type: 'auto', level }, []];
-  if (r.flags === 0) return [{ type: 'unassigned' }, []];
+  if (kind === 'auto') return [{ type: 'auto', level, ...muted }, []];
+  if (kind === 'unassigned') return [{ type: 'unassigned' }, []];
+  if (kind === 'aux') return [{ type: 'aux', ...named(name), level, pan: r.pan, ...muted }, []];
+  if (kind === 'tone') return [{ type: 'tone', ...named(name), level, ...muted }, []];
   return [
     { type: 'unknown', flags: r.flags, source: r.source, ...named(name), level, pan: r.pan },
     [],
@@ -162,12 +210,17 @@ const sendsFor = (
     const start = stereo ? pairStart(ch) : ch;
     const member = byChannel.get(start);
     const kept = send.flags & ~SEND_KNOWN;
-    if (member === undefined) return { ...send, flags: kept };
-    const link = stereo ? SEND_LINKED | (ch === start ? SEND_FIRST : 0) : 0;
+    if (member === undefined) {
+      // Link bits left on a send that isn't a member are stale: keep them as read.
+      return send.flags & SEND_MEMBER ? { ...send, flags: kept } : send;
+    }
+    const second = stereo && ch !== start;
+    const link = stereo ? SEND_LINKED | (second ? 0 : SEND_FIRST) : 0;
     return {
       flags: kept | SEND_MEMBER | link,
       level: rawFromLevel(member.level),
-      pan: member.pan ?? send.pan,
+      // A pair's pan (its balance) is the first send's; the second's is carried as read.
+      pan: second ? send.pan : (member.pan ?? PAN_CENTRE),
     };
   });
 };
@@ -178,52 +231,83 @@ const recordFromKey = (
   channels: readonly Channel[],
   path: string,
 ): Validated<KeyRecord> => {
+  // Bits the model doesn't cover always pass through; so do the covered bits
+  // a key type doesn't set, while the key keeps the type it was read as.
+  const same = kindOf(base) === key.type;
   const kept = base.flags & ~KEY_KNOWN;
+  const keptIfSame = (bits: number) => (same ? base.flags & bits : 0);
   const plain = { ...base, sends: sendsFor(base.sends, [], channels) };
-  const customName = (name: string | undefined) => (name === undefined ? 0 : KEY_CUSTOM_NAME);
+  const at = `${path}.name`;
 
   switch (key.type) {
     case 'unassigned':
-      return keyName(undefined, base.name, `${path}.name`).map((name) => ({
+      return nameFields(undefined, base, at).map((n) => ({
         ...plain,
-        flags: kept,
+        flags: kept | n.flag,
         source: NO_SOURCE,
-        name,
+        name: n.bytes,
       }));
     case 'auto':
-      return keyName(undefined, base.name, `${path}.name`).map((name) => ({
+      // The model gives Auto keys no name; an Auto key keeps its own name bytes and source.
+      return (
+        same
+          ? Result.ok<NameFields, Issues>({ flag: base.flags & KEY_CUSTOM_NAME, bytes: base.name })
+          : nameFields(undefined, base, at)
+      ).map((n) => ({
         ...plain,
-        flags: kept | KEY_AUTO,
-        source: NO_SOURCE,
+        flags: kept | keptIfSame(KEY_STEREO) | n.flag | KEY_AUTO | muteFlag(key.muted),
+        source: same ? base.source : NO_SOURCE,
         level: rawFromLevel(key.level),
-        name,
+        name: n.bytes,
       }));
     case 'channel':
-      return keyName(key.name, base.name, `${path}.name`).map((name) => ({
+      return nameFields(key.name, base, at).map((n) => ({
         ...plain,
-        flags: kept | (isStereo(channels, key.channel) ? KEY_STEREO : 0) | customName(key.name),
+        flags:
+          kept | (isStereo(channels, key.channel) ? KEY_STEREO : 0) | n.flag | muteFlag(key.muted),
         source: key.channel - 1,
         level: rawFromLevel(key.level),
-        pan: key.pan ?? base.pan,
-        name,
+        pan: key.pan ?? PAN_CENTRE,
+        name: n.bytes,
       }));
     case 'group':
-      return keyName(key.name, base.name, `${path}.name`).map((name) => ({
+      return nameFields(key.name, base, at).map((n) => ({
         ...base,
-        flags: kept | KEY_GROUP | customName(key.name),
+        // Bit 0 on a group key is seen in files but not understood: carried.
+        flags: kept | keptIfSame(KEY_STEREO) | n.flag | KEY_GROUP | muteFlag(key.muted),
         source: NO_SOURCE,
         sends: sendsFor(base.sends, key.members, channels),
         level: rawFromLevel(key.level),
-        name,
+        name: n.bytes,
+      }));
+    case 'aux':
+      return nameFields(key.name, base, at).map((n) => ({
+        ...plain,
+        // Every Aux Input key seen has bit 0 (stereo) set; one read with it clear keeps it clear.
+        flags: kept | (same ? base.flags & KEY_STEREO : KEY_STEREO) | n.flag | muteFlag(key.muted),
+        source: AUX_SOURCE,
+        level: rawFromLevel(key.level),
+        pan: key.pan ?? PAN_CENTRE,
+        name: n.bytes,
+      }));
+    case 'tone':
+      return nameFields(key.name, base, at).map((n) => ({
+        ...plain,
+        flags: kept | keptIfSame(KEY_STEREO) | n.flag | muteFlag(key.muted),
+        source: TONE_SOURCE,
+        level: rawFromLevel(key.level),
+        // The model gives the tone no pan: a tone key keeps its byte, a new one is centred.
+        pan: same ? base.pan : PAN_CENTRE,
+        name: n.bytes,
       }));
     case 'unknown':
-      return keyName(key.name, base.name, `${path}.name`).map((name) => ({
+      return nameFields(key.name, base, at).map((n) => ({
         ...base,
-        flags: key.flags,
+        flags: (key.flags & ~KEY_CUSTOM_NAME) | n.flag,
         source: key.source,
         level: rawFromLevel(key.level),
-        pan: key.pan ?? base.pan,
-        name,
+        pan: key.pan ?? PAN_CENTRE,
+        name: n.bytes,
       }));
   }
 };

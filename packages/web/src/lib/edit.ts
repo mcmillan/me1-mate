@@ -222,6 +222,10 @@ export const keyLabel = (system: Editable, key: Key): string => {
     }
     case 'group':
       return key.name || 'Group';
+    case 'aux':
+      return key.name || 'Aux In';
+    case 'tone':
+      return key.name || 'Tone';
     case 'unknown':
       return key.name || 'Unknown';
   }

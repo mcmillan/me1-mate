@@ -430,6 +430,10 @@ const summary = (system: Editable, key: Key, named: boolean): string => {
         levelText(key.level),
       ].join(' · ');
     }
+    case 'aux':
+      return ['Aux Input', ...standIn, levelText(key.level)].join(' · ');
+    case 'tone':
+      return ['test tone', ...standIn, levelText(key.level)].join(' · ');
     case 'unknown':
       return [...standIn, 'kept as it is'].join(' · ');
   }

@@ -15,12 +15,16 @@ export {
   CHANNEL_COUNT,
   type Channel,
   KEY_COUNT,
+  KEY_TYPES,
   type Key,
+  type KeyType,
   LEVEL_MAX,
   LEVEL_MIN,
   type Level,
   type Member,
   PAN_CENTRE,
+  PAN_MAX,
+  PAN_MIN,
 } from './model.ts';
 export {
   buildME1Config,

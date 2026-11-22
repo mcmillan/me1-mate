@@ -47,5 +47,7 @@ export const KEY_TYPE_LABEL: Record<Key['type'], string> = {
   auto: 'Auto',
   channel: 'Channel',
   group: 'Group',
+  aux: 'Aux In',
+  tone: 'Tone',
   unknown: 'Unknown',
 };

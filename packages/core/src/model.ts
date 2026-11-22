@@ -24,10 +24,16 @@ export const LEVEL_MIN = (-0x7fff + 1 + 2560) / 256;
 export const LEVEL_MAX = 10;
 
 /**
- * The pan value for centre. Pan is kept as the ME-1 stores it: a byte, which
- * the range isn't modelled.
+ * Pan is kept as the ME-1 stores it: a step from {@link PAN_MIN} to
+ * {@link PAN_MAX}. Captures of a key panned hard left, centre and hard right
+ * hold 0, 37 and 74, and no file holds anything outside that range. For a
+ * stereo pair the ME-1's pan control is a balance.
  */
-export const PAN_CENTRE = 0x25;
+export const PAN_MIN = 0;
+/** The highest pan step: hard right. */
+export const PAN_MAX = 74;
+/** The centre pan step, and the default. */
+export const PAN_CENTRE = 37;
 
 /** A channel as the hub sends it. The ME-1 shows an unnamed channel by its number. */
 export interface Channel {
@@ -48,7 +54,7 @@ export interface Member {
   readonly channel: number;
   /** Default `0`. */
   readonly level?: Level;
-  /** Default {@link PAN_CENTRE}. */
+  /** {@link PAN_MIN}–{@link PAN_MAX}, default {@link PAN_CENTRE}. For a pair, the balance. */
   readonly pan?: number;
 }
 
@@ -56,7 +62,7 @@ export type Key =
   /** No source. */
   | { readonly type: 'unassigned' }
   /** Auto Mode: the key takes the first channel no other key or group uses. */
-  | { readonly type: 'auto'; readonly level?: Level }
+  | { readonly type: 'auto'; readonly level?: Level; readonly muted?: boolean }
   /** One channel, or a stereo pair by its first (odd) channel. */
   | {
       readonly type: 'channel';
@@ -64,8 +70,10 @@ export type Key =
       /** A custom name of up to 6 characters; omit to show the channel's name. */
       readonly name?: string;
       readonly level?: Level;
-      /** For a pair, balance. */
+      /** {@link PAN_MIN}–{@link PAN_MAX}, default {@link PAN_CENTRE}. For a pair, the balance. */
       readonly pan?: number;
+      /** The key is muted; default `false`. */
+      readonly muted?: boolean;
     }
   /** Several channels mixed under one master level. A channel can be in only one group. */
   | {
@@ -74,10 +82,31 @@ export type Key =
       /** Group master, default `0`. */
       readonly level?: Level;
       readonly members: readonly Member[];
+      /** The whole group is muted; default `false`. */
+      readonly muted?: boolean;
+    }
+  /** The ME-1's own Aux Input: the stereo socket on its rear panel. */
+  | {
+      readonly type: 'aux';
+      /** A custom name of up to 6 characters. */
+      readonly name?: string;
+      readonly level?: Level;
+      /** The balance, {@link PAN_MIN}–{@link PAN_MAX}, default {@link PAN_CENTRE}. */
+      readonly pan?: number;
+      readonly muted?: boolean;
+    }
+  /** The ME-1's built-in test tone (the guide's 1kHz Sine). */
+  | {
+      readonly type: 'tone';
+      /** A custom name of up to 6 characters. */
+      readonly name?: string;
+      readonly level?: Level;
+      readonly muted?: boolean;
     }
   /**
-   * A source the model doesn't cover (the guide's Aux Input and 1kHz Sine). It
-   * keeps the raw codes so a file survives a rewrite.
+   * A key the model doesn't cover: a flag or source combination not yet
+   * explained. It keeps the raw flags and source byte so a file survives a
+   * rewrite.
    */
   | {
       readonly type: 'unknown';
@@ -85,8 +114,22 @@ export type Key =
       readonly source: number;
       readonly name?: string;
       readonly level?: Level;
+      /** The raw pan byte. */
       readonly pan?: number;
     };
+
+/** Every kind of key. */
+export type KeyType = Key['type'];
+
+/** The kinds of key a system can be given. `unknown` keys only come from files. */
+export const KEY_TYPES = [
+  'unassigned',
+  'auto',
+  'channel',
+  'group',
+  'aux',
+  'tone',
+] as const satisfies readonly KeyType[];
 
 /** The first (odd) channel of the pair `channel` belongs to. */
 export const pairStart = (channel: number): number => channel - ((channel + 1) % 2);

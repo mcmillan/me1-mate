@@ -52,19 +52,34 @@ system.map((s) => {
 
 A key is one of:
 
-| `type`       | Meaning                                                                                               | Fields                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `unassigned` | No source.                                                                                            |                                              |
-| `auto`       | Auto Mode: takes the first channel no other key uses.                                                 | `level?`                                     |
-| `channel`    | One channel, or a stereo pair by its first (odd) channel.                                             | `channel`, `name?`, `level?`, `pan?`         |
-| `group`      | Several channels under one master level. A channel can be in only one group.                          | `name?`, `level?`, `members`                 |
-| `unknown`    | A source the model doesn't cover (such as Aux Input or 1kHz Sine), kept raw so it survives a rewrite. | `flags`, `source`, `name?`, `level?`, `pan?` |
+| `type`       | Meaning                                                                      | Fields                                             |
+| ------------ | ---------------------------------------------------------------------------- | -------------------------------------------------- |
+| `unassigned` | No source.                                                                   |                                                    |
+| `auto`       | Auto Mode: takes the first channel no other key uses.                        | `level?`, `muted?`                                 |
+| `channel`    | One channel, or a stereo pair by its first (odd) channel.                    | `channel`, `name?`, `level?`, `pan?`, `muted?`     |
+| `group`      | Several channels under one master level. A channel can be in only one group. | `name?`, `level?`, `members`, `muted?`             |
+| `aux`        | The ME-1's Aux Input, the stereo socket on its rear panel.                   | `name?`, `level?`, `pan?` (the balance), `muted?`  |
+| `tone`       | The ME-1's built-in test tone (the guide's 1kHz Sine).                       | `name?`, `level?`, `muted?`                        |
+| `unknown`    | A flag or source combination not yet explained, kept raw.                    | `flags`, `source`, `name?`, `level?`, `pan?` (raw) |
+
+`KEY_TYPES` lists the types a system can be given (all but `unknown`, which
+only comes from files), and `KeyType` is the union of every `type`. A
+group member is `{ channel, level?, pan? }`. Optional fields default to:
+no custom name (the key shows its source's name), level `0`, pan
+`PAN_CENTRE`, not muted. Reading a file sets every level and pan, and
+`muted: true` only on muted keys.
 
 Levels are dB relative to the `0` marker on the ME-1's level bar, or `'off'`.
 The bar runs from off through `0` to +10. The ME-1 stores 1/256 dB steps, so
 a level read from a file can be `-0.37890625`; anything you write is rounded
-to the nearest step. Pan is kept as the raw byte the ME-1 stores (`37` is
-centre); the range isn't modelled.
+to the nearest step. The highest level an ME-1 has been seen to save is
+`+9.62109375`, short of the guide's +10, so the dB scale is a close
+estimate rather than a measurement.
+
+Pan is the ME-1's own step, from `PAN_MIN` (`0`, hard left) through
+`PAN_CENTRE` (`37`) to `PAN_MAX` (`74`, hard right); these were read
+from presets saved on an ME-1 panned left, centre and right. On a stereo pair
+(a channel key, a group member or the Aux Input) pan is the balance.
 
 ## Build
 
@@ -120,7 +135,9 @@ Both build functions check the draft before encoding:
 - Both channels of a pair are stereo or neither (setting `stereo` on either channel of a pair in a draft marks both).
 - A channel is in at most one group.
 - Key names: 1–6 of `0-9 A-Z a-z` and space. Channel names: up to 6 characters.
-- Levels are `'off'` or within the bar's range; pan is a byte.
+- Levels are `'off'` or within the bar's range; pan is a whole number
+  `PAN_MIN`–`PAN_MAX` (an `unknown` key's raw pan is a byte); `muted` is a
+  boolean.
 
 ```ts
 buildME1Config({ keys: [{ type: 'channel', channel: 99, level: 50 }] });
@@ -144,7 +161,14 @@ in [`src/formats/meu/index.ts`](src/formats/meu/index.ts). In short:
   hub sends to the mixers.
 
 Not modelled, and carried through untouched: the settings block (EQ, limiter,
-mic mute, dimmer), mute state, Aux Input and 1kHz Sine keys, and the pan range. No generated file has been loaded on real hardware yet.
+mic mute, dimmer); the source an Auto Mode key stores; bit 0 on a group key;
+a group key's own pan; the second send of a linked pair in a group, whose pan
+can differ from the first's; stale bytes (names without the custom-name flag,
+link bits on sends that aren't members); the ME-U's
+`UseReceivedNameAndStereo`; and an empty ME-U channel name, read as
+unnamed and written back empty. Sources above 40 other than the tone (47)
+haven't been seen and read as `unknown`. No generated file has been loaded
+on real hardware yet.
 
 ## Layout
 

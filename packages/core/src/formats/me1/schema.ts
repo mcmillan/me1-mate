@@ -1,6 +1,6 @@
 /**
  * The `.ME1` binary schema: an exact, uninterpreted mapping between bytes and
- * plain records. Meaning is assigned in `mapping.ts`.
+ * plain records. Meaning is assigned in `index.ts`.
  *
  * The layout follows the files in `test/fixtures` and the ME-1 Getting Started
  * Guide. Two kinds of file share the extension
@@ -22,13 +22,69 @@
  *           mute, key preset modes …); not modelled
  *
  * Key record (205 bytes):
- *   +0    flags     bit0 stereo pair, bit4 custom name, bit5 group, bit6 Auto Mode
- *   +1    source    0-based channel for a single-channel key, 0xff otherwise
+ *   +0    flags     bit0 stereo, bit3 mute, bit4 custom name, bit5 group,
+ *                   bit6 Auto Mode; bits 1, 2 and 7 never seen set
+ *   +1    source    0–39 channel 1–40, 40 Aux Input, 47 test tone,
+ *                   0xff none (unassigned or group)
  *   +2    48 × send [flags, level (int16), pan]; flags: bit2 group member,
- *                   bit0 stereo linked, bit1 first (odd) channel of the pair
+ *                   bit0 stereo linked, bit1 first (odd) channel of the pair.
+ *                   Only sends 1–40 have been seen in use.
  *   +194  level     int16
  *   +196  pan
- *   +197  name      8 bytes ASCII; first byte 0 = default name (rest is stale)
+ *   +197  name      8 bytes ASCII, space-padded, NUL-terminated
+ *
+ * What the fields mean. "Captured" means seen in a single-change capture: a
+ * preset saved on an ME-1 after changing one thing, named for the change
+ * (the 4 KB presets in github.com/mikecreates86/me1-editor `Configs/Emmaus`,
+ * whose key records use this layout). Facts from that repo's notes alone are
+ * marked as such.
+ *
+ *   Mute: bit3. Captured on a channel key (K2MUT, K3MUTE) and a group key
+ *   (K1GRPMUT: flags 0x28). No send flag for muting one group member has been
+ *   seen. On Aux Input and tone keys the bit is assumed to work the same way.
+ *
+ *   Custom name: bit4. Captured (K2NAME). Without it the key shows its
+ *   source's name and the name bytes are stale: the ME-1 zeroes the first
+ *   byte when a name is dropped (every capture that turns a named group into
+ *   another kind), but one config (ME.ME1) holds spaces there instead.
+ *
+ *   Auto Mode: bit6. Captured (K1AUTO: flags 0x40, source 0). Auto keys may
+ *   hold a source: K1AUTO stores 0 for key 1, and a factory-looking config
+ *   (ME.ME1) stores 0–15 on keys 1–16; another (JOSEPH) stores 0xff. What it
+ *   means isn't known; it's carried, and a new Auto key gets 0xff.
+ *
+ *   Aux Input: source 40 with bit0 set. Captured (K1AUX: flags 0x01), and
+ *   key 9 of OFFICIAL.ME1, which matches the factory demo preset's "Key 9 =
+ *   Local Aux Input" in the ME-1 manual. The manual describes the Aux Input
+ *   as the rear-panel stereo socket, with level and balance; the pan byte is
+ *   presumably that balance. Every Aux Input key seen has bit0 set, so a new
+ *   one gets it.
+ *
+ *   Test tone: source 47, bit0 clear. Captured (K1SYN: flags 0x00), and key
+ *   10 of OFFICIAL.ME1, custom-named "1kTone". The Getting Started Guide
+ *   lists a 1kHz Sine source; that it's this one is inferred from those
+ *   names. No other value above 40 has been seen; mikecreates86's notes call
+ *   every source above 40 a signal generator, unconfirmed.
+ *
+ *   Stereo: bit0 on a channel key means the channel and its partner are
+ *   linked; the manual says a linked pair's pan becomes a balance. Bit0 on a
+ *   group key is seen (ALD DRUM.ME1; captures K1GRP1, K1GRP2: flags 0x21)
+ *   with no linked members, and isn't understood: it's carried.
+ *
+ *   Pan: 0–74, centre 37. Captured for a channel key (K2PL and K2PANL hold 0,
+ *   K2PR and K2PANR 74, K2PC 37) and a group member (K11PL 0, K11PR 74). No
+ *   file holds a pan outside 0–74. In a group, a linked pair stores its pan
+ *   in the first send; the second send's pan is usually the same but in one
+ *   file (ALD DRUM.ME1) is 37 beside a first of 38, so it's carried as read
+ *   and which byte the ME-1 reads isn't known. A group key's own pan (+196)
+ *   is 37 in every file and not modelled.
+ *
+ *   Level: see LEVEL_NOMINAL. The highest level captured is 0xff9f (K1MAX,
+ *   K11MAX: a key and a member at full), and no file holds a level between
+ *   0xff9f and 0; levels move in steps of about 98.5 raw.
+ *
+ *   Sends that aren't group members can keep stale link bits (ALD DRUM.ME1
+ *   key 10, channels 27 and 28); they're carried.
  *
  * Preset table entry (10 bytes): [flag, name × 8, status]. The flag is 1 on
  * preset 1 and 0 elsewhere, and the status is 2, in every (blank) sample.
@@ -67,9 +123,13 @@ export const NO_SOURCE = 0xff;
 /** Raw level meaning fully off (0x8001 as int16). */
 export const LEVEL_OFF = -0x7fff;
 /**
- * Raw level at the `0` marker on the level bar (0xf600). Levels are int16 in
- * what appear to be 1/256 dB steps: new groups default to this value, no level
- * goes above raw 0, and the guide gives +10 dB of headroom above the marker.
+ * Raw level taken as the `0` marker on the level bar (0xf600). Levels are
+ * int16 in what appear to be 1/256 dB steps: new groups default to this value
+ * (every fixture, capture K1GRP), and the guide gives +10 dB of headroom above
+ * the marker. Inferred, not captured: the highest level captured is 0xff9f
+ * (K1MAX), 25 steps of about 98.5 above this value, which these steps put at
+ * +9.62 dB. mikecreates86's notes put the marker one step higher (0xf662),
+ * citing a capture that isn't in that repo.
  */
 export const LEVEL_NOMINAL = -2560;
 
