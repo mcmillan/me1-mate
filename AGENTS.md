@@ -199,7 +199,9 @@ build (`vite preview` on port 4317) in Chromium, Firefox and WebKit at
 time, to keep the machine usable; `pnpm e2e:all` runs every project, add
 `--project webkit` and so on to narrow it); it's separate from `pnpm check` to keep that fast. CI runs it on
 every push and pull request, and the Pages deploy waits for it, so a red suite
-never ships. When behaviour changes, change or add a case in the spec that
+never ships. A commit that only changes copy can start its message with
+`[skip e2e]` to skip the suite (the checks still run and it still deploys);
+don't use it for anything that changes behaviour or layout. When behaviour changes, change or add a case in the spec that
 covers it in the same change: `home`, `picks`, `files` (opening, editing,
 problems, byte-exact exports), `sessions`, `tour`, `layout` (sizes, schemes,
 target sizes, the 1280×720 fit), and `a11y` (axe in both schemes). Tag a test `@desktop` when it needs a wide window (the one-page editor) and `@touch` when

@@ -4,6 +4,10 @@ name: CI
 # end-to-end suite against the production build in Chromium, Firefox and
 # WebKit (desktop and phone). On main, the web editor deploys to GitHub Pages
 # only once both have passed.
+#
+# A push to main whose commit message starts with [skip e2e] (copy changes and
+# the like) skips the end-to-end suite but still runs the checks and deploys.
+# Not [ci skip]: GitHub reads that itself and skips the whole run, deploy and all.
 
 on:
   push:
@@ -49,6 +53,7 @@ jobs:
 
   e2e:
     name: e2e (${{ matrix.engine }})
+    if: ${{ !startsWith(github.event.head_commit.message, '[skip e2e]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -107,7 +112,11 @@ jobs:
 
   pages:
     needs: [check, e2e]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Runs after a skipped e2e too, but never after a failed one.
+    if: >-
+      ${{ always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && needs.check.result == 'success'
+      && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
