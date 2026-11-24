@@ -149,6 +149,8 @@ jobs:
 
   deploy:
     needs: pages
+    # Without always(), a skipped e2e upstream would skip this too.
+    if: ${{ always() && needs.pages.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
