@@ -135,7 +135,9 @@ make sure every export is described and nothing described is gone.
 - It works offline after one visit. The service worker (`src/sw.js`, written
   into the build with its precache list by the plugin in `vite.config.ts`)
   precaches every built file except those `NOT_PRECACHED` names, fetches the
-  page network-first and everything else cache-first. Keep it that way: the
+  page network-first (past the HTTP cache) and everything else cache-first,
+  and saves a page for offline use only when it names this build's files
+  (Pages' CDN can serve the old page for 10 minutes after a deploy). Keep it that way: the
   app must not depend on another origin at run time (it couldn't load
   offline), new files the app needs must land in the build output, and the
   worker must never reload a page (someone may be mid-edit). Only the build

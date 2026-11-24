@@ -152,9 +152,14 @@ an app (`public/manifest.webmanifest`).
   the manifest; not the link preview image or the crawler files) and a
   version hashed from their contents. Only the build registers it
   (`main.tsx`); the dev server has none.
-- **Updates:** the page itself is fetched network-first, so a visit online
-  always gets the latest deploy, and a new build's worker installs a fresh
-  cache, takes over at once and deletes the old one. It never reloads a page:
+- **Updates:** the page itself is fetched network-first, revalidated past the
+  browser's HTTP cache (GitHub Pages sends `max-age=600`), so a visit online
+  gets the latest deploy, and a new build's worker installs a fresh cache,
+  takes over at once and deletes the old one. For 10 minutes after a deploy
+  Pages' CDN can still hand out the old page, so the worker saves a page for
+  offline use only if every hashed file it names is in its own cache: at
+  install it fetches the page again past the CDN if not, and gives up (the old
+  worker stays, and the next visit tries again) if it still doesn't match. It never reloads a page:
   a page that's open keeps the code it loaded and picks up the new build the
   next time it's opened. Offline (or after four seconds without an answer),
   the cached page is used.
@@ -203,8 +208,8 @@ The end-to-end tests (`e2e/`, Playwright) build the editor and serve it with
 `vite preview` on port 4317, then run every check in Chromium, Firefox and
 WebKit on a desktop window and on an iPhone and a Pixel: the journeys (Home,
 picking channels, opening and byte-exact exporting, sessions, the tour, the
-keyboard), working offline after one visit (Chromium, where the service
-worker can be driven), the installable manifest and the crawlable HTML, the
+keyboard), working offline after one visit and getting a new deploy safely
+(Chromium, where the service worker can be driven), the installable manifest and the crawlable HTML, the
 layout at six window sizes in both colour schemes, an axe scan
 of every screen and dialog in both colour schemes. Reports and traces go
 to `e2e-results/`. Install the browsers once with
