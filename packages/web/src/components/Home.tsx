@@ -91,6 +91,7 @@ const HOME_CSS = `
 
 .home-foot { margin-block-start: auto; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-text); line-height: 1.5; }
 .home-foot p { margin: 0; text-wrap: pretty; }
+.home-foot p + p { margin-block-start: 4px; }
 .home-foot a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 45%, transparent); text-underline-offset: 0.2em; border-radius: 4px; }
 @media (hover: hover) {
   .home-foot a:hover { color: var(--ink); text-decoration-color: currentColor; }
@@ -357,6 +358,10 @@ export const Home = () => {
             GitHub
           </a>
           . Not affiliated with Allen &amp; Heath.
+        </p>
+        <p>
+          Use it at your own risk: I'm not responsible for any damage to your hardware, files or
+          shows. Keep a copy of your original files.
         </p>
       </footer>
     </div>
