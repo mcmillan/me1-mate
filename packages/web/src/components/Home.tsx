@@ -90,7 +90,8 @@ const HOME_CSS = `
 .home-file { padding: 3px 10px; border: 1.5px solid transparent; border-radius: 999px; background: var(--ink); color: var(--canvas); font-size: 0.75rem; font-weight: var(--w-ui); line-height: 1.3; }
 
 .home-foot { margin-block-start: auto; color: var(--muted); font-size: 0.8125rem; font-weight: var(--w-text); line-height: 1.5; }
-.home-foot p { margin: 0; text-wrap: pretty; }
+.home-foot p { display: block; margin: 0; text-wrap: pretty; }
+.home-foot p + p { margin-block-start: 4px; }
 .home-foot a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 45%, transparent); text-underline-offset: 0.2em; border-radius: 4px; }
 @media (hover: hover) {
   .home-foot a:hover { color: var(--ink); text-decoration-color: currentColor; }
@@ -351,13 +352,20 @@ export const Home = () => {
           Made by{' '}
           <a href="https://joshmcmillan.com" target="_blank" rel="noreferrer">
             Josh McMillan
+          </a>{' '}
+          of{' '}
+          <a href="https://msd.audio" target="_blank" rel="noreferrer">
+            McMillan Sound Design
           </a>
           . The code is on{' '}
           <a href="https://github.com/mcmillan/me1-mate" target="_blank" rel="noreferrer">
             GitHub
           </a>
-          . Not affiliated with Allen &amp; Heath. Use it at your own risk: I'm not responsible for
-          any damage to your hardware, files or shows. Keep a copy of your original files.
+          .
+        </p>
+        <p>
+          Not affiliated with Allen &amp; Heath. Use it at your own risk: I'm not responsible for
+          any damage to your hardware, files or shows.
         </p>
       </footer>
     </div>
