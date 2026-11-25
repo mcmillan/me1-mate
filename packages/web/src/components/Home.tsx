@@ -364,8 +364,13 @@ export const Home = () => {
           .
         </p>
         <p>
-          Not affiliated with Allen &amp; Heath. Use it at your own risk: I'm not responsible for
+          Not affiliated with Allen &amp; Heath. Use it at your own risk: we're not responsible for
           any damage to your hardware, files or shows.
+        </p>
+        <p>
+          McMillan Sound Design is a trading name of Josh McMillan's Consultancy Vehicle Ltd,
+          registered in England and Wales, company no. 16833351. Registered office: The Old Bakery,
+          90 Camden Road, Tunbridge Wells, TN1 2QP.
         </p>
       </footer>
     </div>
